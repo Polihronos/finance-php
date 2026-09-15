@@ -8,7 +8,7 @@ $dotenv->load();
 // $host = '127.0.0.1';
 // $port = 3306;
 // $database = 'finance_app';
-// $username = 'root';
+// $username = 'finance_app';
 // $password = 'admin';
 
 $host = $_ENV['DB_HOST'];
