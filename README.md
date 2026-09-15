@@ -61,4 +61,19 @@ php -S localhost:8000 -t public
 
 Open [localhost:8000](http://localhost:8000).
 
-Table creation and API endpoints are not implemented yet.
+## Create the tables
+
+From the project root:
+
+```sh
+php create_tables.php
+```
+
+Safe to run again: existing tables and data are kept.
+
+Deletion rules:
+
+- Deleting a user also deletes that user's categories and transactions.
+- A category cannot be deleted while transactions still use it.
+
+API endpoints are not implemented yet.

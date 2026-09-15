@@ -5,3 +5,5 @@
 /uploads/
 /storage/
 *.log
+AGENTS.md
+claude.md
