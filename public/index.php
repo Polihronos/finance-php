@@ -1,22 +1,15 @@
-<!DOCTYPE html>
-
-<html>
-
-<body>
-
 <?php
 
-$url = $_SERVER['REQUEST_URI'];
+require_once __DIR__ . '/../src/Router.php';
 
-if ($url == "/") {
-    echo "you are in the root";
-} else {
-    echo "you are on $url route";
-}
+$router = new Router();
 
-?>
+$router->get('/', function () {
+    echo "root";
+});
 
-</body>
+$router->dispatch($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);
 
-
-</html>
+// echo '<pre>';
+// print_r($_SERVER);
+// echo '</pre>';
