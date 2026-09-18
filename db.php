@@ -29,9 +29,7 @@ try {
         ]
     );
 
-    // echo 'Connected to MariaDB successfully!';
 } catch (PDOException $error) {
-    // echo 'Connection failed: ' . $error->getMessage();
     exit('Database connection failed: ' . $error->getMessage());
 }
 
