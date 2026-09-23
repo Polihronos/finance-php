@@ -51,7 +51,19 @@ cp .env.example .env
 
 ## Run
 
-Create a `finance_app` database. Set your local credentials in `.env`.
+Create two databases, one for the app and one for the tests. Set your local credentials in `.env`.
+
+```sql
+CREATE DATABASE finance_app;
+CREATE DATABASE finance_app_test;
+```
+
+If the user in `.env` is not `root`, give it access to both:
+
+```sql
+GRANT ALL PRIVILEGES ON finance_app.* TO 'your_user'@'localhost';
+GRANT ALL PRIVILEGES ON finance_app_test.* TO 'your_user'@'localhost';
+```
 
 From the project root:
 
@@ -87,19 +99,13 @@ Creates a user. The password is stored as a hash.
 Request:
 
 ```json
-{"name": "Nikola", "email": "nikola@example.com", "password": "secret"}
+{"name": "Nikola", "email": "nikola@example.com", "password": "secret123"}
 ```
 
 Response:
 
 ```json
-{"success": true, "user_id": "1"}
-```
-
-Example:
-
-```sh
-curl -X POST localhost:8000/register -H "Content-Type: application/json" -d '{"name":"Nikola","email":"nikola@example.com","password":"secret"}'
+{"success": true, "user_id": 1}
 ```
 
 Other endpoints are tracked in [issue #3](https://github.com/Polihronos/finance-php/issues/3).
