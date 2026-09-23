@@ -8,7 +8,8 @@ use App\Auth;
 use App\Database;
 use App\Router;
 
-$dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . '/..');
+$envFile = getenv('APP_ENV') === 'testing' ? '.env.testing' : '.env';
+$dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . '/..', $envFile);
 $dotenv->load();
 
 $router = new Router();

@@ -3,7 +3,8 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 use App\Database;
 
-$dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
+$envFile = getenv('APP_ENV') === 'testing' ? '.env.testing' : '.env';
+$dotenv = Dotenv\Dotenv::createImmutable(__DIR__ , $envFile);
 $dotenv->load();
 
 $pdo = Database::connect();
