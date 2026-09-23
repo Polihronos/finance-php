@@ -1,4 +1,5 @@
 <?php
+namespace App;
 
 class Router
 {
@@ -33,7 +34,7 @@ class Router
 
         if (!isset($this->routes[$key])) {
             http_response_code(404);
-            echo "Not found";
+            echo json_encode(['error' => 'Not found']);
             return;
         }
 
