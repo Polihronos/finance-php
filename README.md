@@ -76,4 +76,30 @@ Deletion rules:
 - Deleting a user also deletes that user's categories and transactions.
 - A category cannot be deleted while transactions still use it.
 
-API endpoints are not implemented yet.
+## API
+
+All responses are JSON. Request bodies are JSON.
+
+### `POST /register`
+
+Creates a user. The password is stored as a hash.
+
+Request:
+
+```json
+{"name": "Nikola", "email": "nikola@example.com", "password": "secret"}
+```
+
+Response:
+
+```json
+{"success": true, "user_id": "1"}
+```
+
+Example:
+
+```sh
+curl -X POST localhost:8000/register -H "Content-Type: application/json" -d '{"name":"Nikola","email":"nikola@example.com","password":"secret"}'
+```
+
+Other endpoints are tracked in [issue #3](https://github.com/Polihronos/finance-php/issues/3).
