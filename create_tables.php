@@ -1,7 +1,12 @@
 <?php
-require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/vendor/autoload.php';
 
-/** @var PDO $pdo */
+use App\Database;
+
+$dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
+$dotenv->load();
+
+$pdo = Database::connect();
 
 $pdo->exec("
     CREATE TABLE IF NOT EXISTS users (
