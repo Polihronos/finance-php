@@ -21,11 +21,16 @@ class Auth
             echo json_encode(['error' => 'name, email and password are required']);
             return;
         }
-
         // check if valid
         if (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
             http_response_code(400);
             echo json_encode(['error' => 'invalid email']);
+            return;
+        }
+        // check if password > 8
+        if (strlen($data['password']) < 8) {
+            http_response_code(400);
+            echo json_encode(['error' => 'password must be at least 8 characters']);
             return;
         }
 
@@ -42,17 +47,19 @@ class Auth
             'hash' => $hash,
             ]);
         } catch (PDOException $e) {
-            if ($e->getcode() === '23000') {
-                http_response_code('409');
+            if ($e->getCode() === '23000') {
+                http_response_code(409);
                 echo json_encode(['error' => 'email already registered']);
                 return;
             }
-        throw $e;
+            throw $e;
         }
+
+        http_response_code(201);
 
         echo json_encode ([
             'success' => true,
-            'user_id' => $this->pdo->lastInsertId(),
+            'user_id' => (int) $this->pdo->lastInsertId(),
         ]);
     }
 }
