@@ -55,4 +55,24 @@ abstract class ApiTestCase extends TestCase
         self::$pdo->exec('TRUNCATE TABLE users');
         self::$pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
     }
+
+    protected function post(string $path, array $body): array
+    {
+        $context = stream_context_create([
+            'http' => [
+                'method' => 'POST',
+                'header' => 'Content-Type: application/json',
+                'content' => json_encode($body),
+                'ignore_errors' => true,
+            ],
+        ]);
+
+        $json = file_get_contents('http://127.0.0.1:8001' . $path, false, $context);
+        $headers = http_get_last_response_headers();
+
+        return [
+            'status' => (int) explode(' ', $headers[0])[1],
+            'body' => json_decode($json, true),
+        ];
+    }
 }
