@@ -13,32 +13,53 @@ class Auth
 
     public function register(): void
     {
-        $data = json_decode(file_get_contents('php://input'), true);
+        $data = Request::json();
+
+        if ($data === null) {
+            http_response_code(400);
+            echo json_encode(['error' => 'request body must be JSON']);
+            return;
+        }
+
+        foreach (['name', 'email', 'password'] as $field) {
+            if (!isset($data[$field])) {
+                http_response_code(400);
+                echo json_encode(['error' => "$field is required"]);
+                return;
+            }
+
+            if (!is_string($data[$field])) {
+                http_response_code(400);
+                echo json_encode(['error' => "$field must be text"]);
+                return;
+            }
+        }
 
         $data['name'] = mb_trim($data['name']);
 
-        // check if a field is empty
-        if (empty($data['name']) || empty($data['email']) || empty($data['password'])) {
-            http_response_code(400);
-            echo json_encode(['error' => 'name, email and password are required']);
-            return;
+        foreach (['name', 'email', 'password'] as $field) {
+            if ($data[$field] === '') {
+                http_response_code(400);
+                echo json_encode(['error' => "$field is required"]);
+                return;
+            }
         }
-        // check if valid
+
         if (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
             http_response_code(400);
             echo json_encode(['error' => 'invalid email']);
             return;
         }
-        // check if password >= 8
+
         if (mb_strlen($data['password']) < 8) {
             http_response_code(400);
             echo json_encode(['error' => 'password must be at least 8 characters']);
             return;
         }
-        // check if password < 40
-        if (mb_strlen($data['password']) > 39) {
+
+        if (mb_strlen($data['password']) > 36) {
             http_response_code(400);
-            echo json_encode(['error' => 'password must be less than 40 characters']);
+            echo json_encode(['error' => 'password must be less than 36 characters']);
             return;
         }
 

@@ -56,13 +56,13 @@ abstract class ApiTestCase extends TestCase
         self::$pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
     }
 
-    protected function post(string $path, array $body): array
+    protected function postRaw(string $path, string $body): array
     {
         $context = stream_context_create([
             'http' => [
                 'method' => 'POST',
                 'header' => 'Content-Type: application/json',
-                'content' => json_encode($body),
+                'content' => ($body),
                 'ignore_errors' => true,
             ],
         ]);
@@ -74,5 +74,15 @@ abstract class ApiTestCase extends TestCase
             'status' => (int) explode(' ', $headers[0])[1],
             'body' => json_decode($json, true),
         ];
+    }
+
+    protected function post(string $path, array $body): array
+    {
+        return $this->postRaw($path, json_encode($body));
+    }
+
+    protected function countUsers(): int
+    {
+        return (int) self::$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
     }
 }

@@ -7,6 +7,10 @@ require_once __DIR__ . '/../vendor/autoload.php';
 use App\Auth;
 use App\Database;
 use App\Router;
+use App\ErrorHandler;
+
+ErrorHandler::register();
+
 
 $envFile = getenv('APP_ENV') === 'testing' ? '.env.testing' : '.env';
 $dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . '/..', $envFile);
