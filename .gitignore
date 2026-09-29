@@ -7,3 +7,4 @@
 *.log
 AGENTS.md
 claude.md
+.phpunit.result.cache

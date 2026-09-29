@@ -15,7 +15,9 @@ class Auth
     {
         $data = json_decode(file_get_contents('php://input'), true);
 
-        // check if empty
+        $data['name'] = mb_trim($data['name']);
+
+        // check if a field is empty
         if (empty($data['name']) || empty($data['email']) || empty($data['password'])) {
             http_response_code(400);
             echo json_encode(['error' => 'name, email and password are required']);
@@ -27,10 +29,16 @@ class Auth
             echo json_encode(['error' => 'invalid email']);
             return;
         }
-        // check if password > 8
-        if (strlen($data['password']) < 8) {
+        // check if password >= 8
+        if (mb_strlen($data['password']) < 8) {
             http_response_code(400);
             echo json_encode(['error' => 'password must be at least 8 characters']);
+            return;
+        }
+        // check if password < 40
+        if (mb_strlen($data['password']) > 39) {
+            http_response_code(400);
+            echo json_encode(['error' => 'password must be less than 40 characters']);
             return;
         }
 
