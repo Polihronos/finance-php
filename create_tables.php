@@ -47,8 +47,18 @@ $pdo->exec("
     )
 ");
 
+$pdo->exec("
+    CREATE TABLE IF NOT EXISTS sessions (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED NOT NULL,
+    token_hash CHAR(64) NOT NULL UNIQUE,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+");
 
-echo "users, categories and transaction tables ready\n";
+echo "users, categories, transaction and session tables ready\n";
 
 
 ?>

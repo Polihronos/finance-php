@@ -26,7 +26,10 @@ $router->get('/', function () {
 
 $router->post('/register', function () use ($auth) {
     $auth->register();
-}) ;
+});
+$router->post('/login', function () use ($auth) {
+    $auth->login();
+});
 
 $router->dispatch($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);
 
