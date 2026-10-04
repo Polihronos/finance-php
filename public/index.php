@@ -30,6 +30,9 @@ $router->post('/register', function () use ($auth) {
 $router->post('/login', function () use ($auth) {
     $auth->login();
 });
+$router->post('/logout', function () use ($auth) {
+    $auth->logout();
+});
 
 $router->dispatch($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);
 

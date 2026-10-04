@@ -9,6 +9,7 @@ use Throwable;
 class Auth
 {
     private const DUMMY_HASH = '$2y$12$gKMX8cpafGzHjhru57/rGeTb0pscojMgA7kWYs3Y5gnUqsVEU8.yC';
+    private ?string $tokenHash = null;
 
     public function __construct(private PDO $pdo)
     {
@@ -151,6 +152,53 @@ class Auth
             'user_id' => $user['id'],
             'token' => $token,
         ]);
+    }
+
+    public function requireUserId(): ?int
+    {
+        $header = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+
+        if (!preg_match('/^Bearer ([0-9a-f]{64})$/', $header, $matches)) {
+            http_response_code(401);
+            echo json_encode(['error' => 'not logged in']);
+            return null;
+        }
+
+        $stmt = $this->pdo->prepare(
+            'SELECT user_id, expires_at > NOW() AS active FROM sessions WHERE token_hash = :token_hash'
+        );
+        $this->tokenHash = hash('sha256', $matches[1]);
+        $stmt->execute(['token_hash' => $this->tokenHash]);
+        $session = $stmt->fetch();
+
+        if ($session === false) {
+            http_response_code(401);
+            echo json_encode(['error' => 'not logged in']);
+            return null;
+        }
+
+        if (!$session['active']) {
+            $this->pdo->exec('DELETE FROM sessions WHERE expires_at <= NOW()');
+            http_response_code(401);
+            echo json_encode(['error' => 'not logged in']);
+            return null;
+        }
+
+        return $session['user_id'];
+    }
+
+    public function logout(): void
+    {
+        $userId = $this->requireUserId();
+        if ($userId === null) {
+            return;
+        }
+
+        $stmt = $this->pdo->prepare('DELETE FROM sessions WHERE token_hash = :token_hash');
+        $stmt->execute(['token_hash' => $this->tokenHash]);
+
+        http_response_code(200);
+        echo json_encode(['success' => true]);
     }
 
     private function createSession(int $userId): string

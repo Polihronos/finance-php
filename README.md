@@ -9,7 +9,7 @@ MariaDB, no framework. A Vue web app and a Flutter mobile app are planned as cli
 |---|---|
 | `POST /register` | Done, tested |
 | `POST /login` | Done, tested |
-| `POST /logout` | Planned |
+| `POST /logout` | Done, tested |
 | Transactions: create, list, edit, delete | Planned |
 | Categories: create, list, edit, delete | Planned |
 
@@ -41,7 +41,7 @@ Deletion rules:
 public/index.php      Entry point. Loads config, turns on error handling, registers routes.
 src/Router.php        Matches method and path to a handler. Unknown routes answer 404.
 src/Request.php       Reads the JSON request body.
-src/Auth.php          Register and login, and the sessions they create.
+src/Auth.php          Register, login, logout, and the token check for protected endpoints.
 src/Database.php      Opens the database connection from the .env settings.
 src/ErrorHandler.php  Turns any unplanned failure into a 500 JSON answer and logs the details.
 create_tables.php     Creates the tables. Safe to run again.
@@ -161,7 +161,7 @@ Request and response bodies are JSON.
 | `200` | Success |
 | `201` | Success, something was created |
 | `400` | The request is missing something or has the wrong format |
-| `401` | Wrong email or password |
+| `401` | Wrong email or password, or a missing, invalid or expired token |
 | `404` | No such endpoint |
 | `409` | Conflicts with existing data |
 | `500` | Server error. The caller only sees `{"error": "Internal server error"}` |
@@ -179,7 +179,15 @@ device. Only a SHA-256 hash of it is stored, so the token cannot be read back fr
 database. A session lasts 30 days. Each login creates a new session, so a user can be logged in
 on several devices at once.
 
-Protected endpoints (transactions, categories, logout) will expect this token. None exist yet.
+Protected endpoints need the token in the `Authorization` header:
+
+```
+Authorization: Bearer 9a59d267832e358d55aef1712779caf7094709418ca846d86fa7fa3ba9ca1b3e
+```
+
+A missing header, a malformed or unknown token, or an expired session all get the same answer:
+`401` with `{"error": "not logged in"}`. When an expired token is used, all expired sessions are
+deleted at that moment.
 
 ### `POST /register`
 
@@ -229,6 +237,21 @@ The user and the session are saved together: if one fails, neither is kept.
 Capitals in the email are ignored. An unknown email and a wrong password get the same answer in
 the same time, so the API does not reveal which emails are registered.
 
+### `POST /logout`
+
+Protected. Ends the session of the token in the `Authorization` header. The user's other
+sessions, on other devices, stay logged in. No request body.
+
+`200 OK`:
+
+```json
+{"success": true}
+```
+
+| Status | Error | When |
+|---|---|---|
+| `401` | `not logged in` | Missing, malformed, unknown or expired token, or a token that was already logged out |
+
 ## Tests
 
 macOS:
@@ -252,5 +275,6 @@ from the same state.
 | File | Covers |
 |---|---|
 | `tests/RegisterTest.php` | Successful registration, body and field checks, email format, password length, duplicate emails |
-| `tests/LoginTest.php` | Successful login, body and field checks, wrong and unknown credentials |
-| `tests/ApiTestCase.php` | Shared setup: test server, database reset, `post()`, `postRaw()`, `countUsers()`, `countSessions()` |
+| `tests/LoginTest.php` | Successful login, body and field checks, wrong and unknown credentials, email capitals |
+| `tests/LogoutTest.php` | Logout of one session, and the token check: missing, malformed, unknown, reused and expired tokens |
+| `tests/ApiTestCase.php` | Shared setup: test server, database reset, `post()` and `postRaw()` with optional extra headers, `countUsers()`, `countSessions()` |
