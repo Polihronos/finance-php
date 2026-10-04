@@ -15,8 +15,14 @@ class RegisterTest extends ApiTestCase
         ]);
 
         $this->assertSame(201, $response['status']);
-        $this->assertSame(['success' => true, 'user_id' => 1], $response['body']);
+        $this->assertTrue($response['body']['success']);
+        $this->assertSame(1, $response['body']['user_id']);
+        $this->assertMatchesRegularExpression(
+            '/^[0-9a-f]{64}$/', $response['body']['token']
+        );
         $this->assertSame(1, $this->countUsers());
+        $this->assertSame(1, $this->countSessions());
+
     }
 
     public function test_register_create_user_password_8(): void
@@ -28,8 +34,13 @@ class RegisterTest extends ApiTestCase
         ]);
 
         $this->assertSame(201, $response['status']);
-        $this->assertSame(['success' => true, 'user_id' => 1], $response['body']);
+        $this->assertTrue($response['body']['success']);
+        $this->assertSame(1, $response['body']['user_id']);
+        $this->assertMatchesRegularExpression(
+            '/^[0-9a-f]{64}$/', $response['body']['token']
+        );
         $this->assertSame(1, $this->countUsers());
+        $this->assertSame(1, $this->countSessions());
     }
 
     public function test_register_create_user_password_36(): void
@@ -41,8 +52,27 @@ class RegisterTest extends ApiTestCase
         ]);
 
         $this->assertSame(201, $response['status']);
-        $this->assertSame(['success' => true, 'user_id' => 1], $response['body']);
+        $this->assertTrue($response['body']['success']);
+        $this->assertSame(1, $response['body']['user_id']);
+        $this->assertMatchesRegularExpression(
+            '/^[0-9a-f]{64}$/', $response['body']['token']
+        );
         $this->assertSame(1, $this->countUsers());
+        $this->assertSame(1, $this->countSessions());
+    }
+
+    public function test_register_stores_only_token_hash(): void
+    {
+        $response = $this->post('/register', [
+            'name' => 'TestName',
+            'email' => 'Testemail@example.com',
+            'password' => 'testpassword',
+        ]);
+
+        $token = $response['body']['token'];
+        $stored = self::$pdo->query('SELECT token_hash FROM sessions')->fetchColumn();
+
+        $this->assertSame(hash('sha256', $token), $stored);
     }
 
     // Request body: Request::json() must return a JSON object, otherwise 400
@@ -202,7 +232,7 @@ class RegisterTest extends ApiTestCase
 
         $this->assertSame(400, $response['status']);
         $this->assertSame(['error' => 'password is required'], $response['body']);
-$this->assertSame(0, $this->countUsers());
+        $this->assertSame(0, $this->countUsers());
     }
 
     public function test_register_rejects_all_empty_fields(): void
@@ -283,5 +313,6 @@ $this->assertSame(0, $this->countUsers());
         $this->assertSame(409, $secondResponse['status']);
         $this->assertSame(['error' => 'email already registered'], $secondResponse['body']);
         $this->assertSame(1, $this->countUsers());
+        $this->assertSame(1, $this->countSessions());
     }
 }

@@ -53,6 +53,7 @@ abstract class ApiTestCase extends TestCase
         self::$pdo->exec('TRUNCATE TABLE transactions');
         self::$pdo->exec('TRUNCATE TABLE categories');
         self::$pdo->exec('TRUNCATE TABLE users');
+        self::$pdo->exec('TRUNCATE TABLE sessions');
         self::$pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
     }
 
@@ -84,5 +85,10 @@ abstract class ApiTestCase extends TestCase
     protected function countUsers(): int
     {
         return (int) self::$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
+    }
+
+    protected function countSessions(): int
+    {
+        return (int) self::$pdo->query('SELECT COUNT(*) FROM sessions')->fetchColumn();
     }
 }

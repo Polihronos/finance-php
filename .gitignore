@@ -8,3 +8,4 @@
 AGENTS.md
 claude.md
 .phpunit.result.cache
+.DS_Store
