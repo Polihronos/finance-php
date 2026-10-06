@@ -10,8 +10,11 @@ MariaDB, no framework. A Vue web app and a Flutter mobile app are planned as cli
 | `POST /register` | Done, tested |
 | `POST /login` | Done, tested |
 | `POST /logout` | Done, tested |
+| `POST /categories` | Done, tested |
+| `GET /categories` | Done, tested |
+| `PUT /categories/{id}` | Done, tested |
+| `DELETE /categories/{id}` | Done, tested |
 | Transactions: create, list, edit, delete | Planned |
-| Categories: create, list, edit, delete | Planned |
 
 Planned endpoints are tracked in [issue #3](https://github.com/Polihronos/finance-php/issues/3).
 
@@ -23,7 +26,7 @@ Planned endpoints are tracked in [issue #3](https://github.com/Polihronos/financ
 |---|---|
 | `users` | Name, email, password hash, role, creation date |
 | `sessions` | One row per login: the user, a SHA-256 hash of the token, creation and expiry date |
-| `categories` | A user's own spending categories |
+| `categories` | A user's own spending categories. Names are unique per user, capitals ignored. |
 | `transactions` | Amount, currency, date, payment method, description, place, optional photo path |
 
 Deletion rules:
@@ -39,9 +42,11 @@ Deletion rules:
 
 ```
 public/index.php      Entry point. Loads config, turns on error handling, registers routes.
-src/Router.php        Matches method and path to a handler. Unknown routes answer 404.
+src/Router.php        Matches method and path to a handler, with one numeric {id} in the path.
+                      Unknown routes answer 404.
 src/Request.php       Reads the JSON request body.
 src/Auth.php          Register, login, logout, and the token check for protected endpoints.
+src/Categories.php    Create, list, rename and delete the logged-in user's categories.
 src/Database.php      Opens the database connection from the .env settings.
 src/ErrorHandler.php  Turns any unplanned failure into a 500 JSON answer and logs the details.
 create_tables.php     Creates the tables. Safe to run again.
@@ -142,6 +147,13 @@ $env:APP_ENV = 'testing'; php create_tables.php; Remove-Item Env:APP_ENV
 
 `APP_ENV=testing` makes the script read `.env.testing` instead of `.env`.
 
+The script does not change tables that already exist. Databases created before category names
+became unique need this once, in both databases:
+
+```sql
+ALTER TABLE categories ADD UNIQUE KEY user_category_name (user_id, name);
+```
+
 ## Run
 
 From the project root:
@@ -162,7 +174,7 @@ Request and response bodies are JSON.
 | `201` | Success, something was created |
 | `400` | The request is missing something or has the wrong format |
 | `401` | Wrong email or password, or a missing, invalid or expired token |
-| `404` | No such endpoint |
+| `404` | No such endpoint, or the item does not exist or belongs to another user |
 | `409` | Conflicts with existing data |
 | `500` | Server error. The caller only sees `{"error": "Internal server error"}` |
 
@@ -252,6 +264,85 @@ sessions, on other devices, stay logged in. No request body.
 |---|---|---|
 | `401` | `not logged in` | Missing, malformed, unknown or expired token, or a token that was already logged out |
 
+### Categories
+
+All category endpoints are protected and only see the logged-in user's own categories. A
+category of another user gets the same `404` as one that does not exist, so ids of other users
+cannot be discovered. Every category endpoint can also answer `401` with `not logged in`.
+
+Names are checked the same way on create and rename:
+
+| Status | Error | When |
+|---|---|---|
+| `400` | `request body must be JSON` | The body is not a JSON object |
+| `400` | `name is required` | Missing, `null` or empty. A name of only spaces counts as empty. |
+| `400` | `name must be text` | A number, list or other non-text value |
+| `400` | `name must be at most 100 characters` | Longer than 100 characters, counted after trimming |
+
+Spaces at the start and end of a name are removed before it is saved.
+
+### `POST /categories`
+
+```json
+{"name": "Food"}
+```
+
+`201 Created`:
+
+```json
+{"success": true, "category_id": 1, "name": "Food"}
+```
+
+| Status | Error | When |
+|---|---|---|
+| `409` | `category already exists` | The user already has a category with this name. Capitals are ignored. |
+
+Two users can each have a category with the same name.
+
+### `GET /categories`
+
+No request body. `200 OK`, sorted by name:
+
+```json
+{"categories": [{"id": 2, "name": "Bills"}, {"id": 1, "name": "Food"}]}
+```
+
+A user without categories gets `{"categories": []}`.
+
+### `PUT /categories/{id}`
+
+Renames a category.
+
+```json
+{"name": "Groceries"}
+```
+
+`200 OK`:
+
+```json
+{"success": true, "category_id": 1, "name": "Groceries"}
+```
+
+| Status | Error | When |
+|---|---|---|
+| `404` | `category not found` | No such category for this user |
+| `409` | `category already exists` | Another category of this user already has this name |
+
+Saving the current name again, or changing only its capitals, succeeds.
+
+### `DELETE /categories/{id}`
+
+No request body. `200 OK`:
+
+```json
+{"success": true}
+```
+
+| Status | Error | When |
+|---|---|---|
+| `404` | `category not found` | No such category for this user |
+| `409` | `category is used by transactions` | Transactions still use this category |
+
 ## Tests
 
 macOS:
@@ -277,4 +368,5 @@ from the same state.
 | `tests/RegisterTest.php` | Successful registration, body and field checks, email format, password length, duplicate emails |
 | `tests/LoginTest.php` | Successful login, body and field checks, wrong and unknown credentials, email capitals |
 | `tests/LogoutTest.php` | Logout of one session, and the token check: missing, malformed, unknown, reused and expired tokens |
-| `tests/ApiTestCase.php` | Shared setup: test server, database reset, `post()` and `postRaw()` with optional extra headers, `countUsers()`, `countSessions()` |
+| `tests/CategoriesTest.php` | Create, list, rename and delete: name checks, duplicates, sorting, other users' categories, categories used by transactions, token check |
+| `tests/ApiTestCase.php` | Shared setup: test server, database reset, `post()`, `put()`, `get()` and `delete()` (plus `postRaw()` and `putRaw()` for bodies that are not JSON) with optional extra headers, `countUsers()`, `countSessions()` |

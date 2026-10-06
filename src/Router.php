@@ -32,13 +32,22 @@ class Router
 
         $key = "$method $path";
 
-        if (!isset($this->routes[$key])) {
-            http_response_code(404);
-            echo json_encode(['error' => 'Not found']);
+        if (isset($this->routes[$key])) {
+            $this->routes[$key]();
             return;
         }
 
-        $this->routes[$key]();
+        foreach ($this->routes as $routeKey => $handler) {
+            $pattern = '#^' . str_replace('{id}', '(\d+)', $routeKey) . '$#';
+
+            if (preg_match($pattern, $key, $matches)) {
+                $handler((int) $matches[1]);
+                return;
+            }
+        }
+
+        http_response_code(404);
+        echo json_encode(['error' => 'Not found']);
     }
 
     private function add(string $method, string $path, callable $handler): void

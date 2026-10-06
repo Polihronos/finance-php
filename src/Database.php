@@ -3,6 +3,7 @@
 namespace App;
 
 use PDO;
+use Pdo\Mysql;
 use PDOException;
 
 class Database
@@ -22,6 +23,7 @@ class Database
             [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                Mysql::ATTR_FOUND_ROWS => true,
             ]
         );
 
