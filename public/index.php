@@ -9,6 +9,7 @@ use App\Database;
 use App\Router;
 use App\ErrorHandler;
 use App\Categories;
+use App\Transactions;
 
 ErrorHandler::register();
 
@@ -21,6 +22,7 @@ $router = new Router();
 $pdo = Database::connect();
 $auth = new Auth($pdo);
 $categories = new Categories($pdo);
+$transactions = new Transactions($pdo);
 
 $router->get('/', function () {
     echo "root";
@@ -66,6 +68,38 @@ $router->delete('/categories/{id}', function (int $id) use ($auth, $categories) 
         return;
     }
     $categories->delete($userId, $id);
+});
+
+$router->post('/transactions', function () use ($auth, $transactions) {
+    $userId = $auth->requireUserId();
+    if ($userId === null) {
+        return;
+    }
+    $transactions->create($userId);
+});
+
+$router->get('/transactions', function () use ($auth, $transactions) {
+    $userId = $auth->requireUserId();
+    if ($userId === null) {
+        return;
+    }
+    $transactions->list($userId);
+});
+
+$router->put('/transactions/{id}', function (int $id) use ($auth, $transactions) {
+    $userId = $auth->requireUserId();
+    if ($userId === null) {
+        return;
+    }
+    $transactions->update($userId, $id);
+});
+
+$router->delete('/transactions/{id}', function (int $id) use ($auth, $transactions) {
+    $userId = $auth->requireUserId();
+    if ($userId === null) {
+        return;
+    }
+    $transactions->delete($userId, $id);
 });
 
 

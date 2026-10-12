@@ -17,9 +17,16 @@ class ErrorHandler
         });
 
         set_exception_handler(function (Throwable $e): void {
+            header('Content-type: application/json');
+
+            if ($e instanceof HttpException) {
+                http_response_code($e->status);
+                echo json_encode(['error' => $e->getMessage()]);
+                return;
+            }
+
             error_log((string) $e);
             http_response_code(500);
-            header('Content-type: application/json');
             echo json_encode(['error' => 'Internal server error']);
         });
     }

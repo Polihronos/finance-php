@@ -14,7 +14,10 @@ MariaDB, no framework. A Vue web app and a Flutter mobile app are planned as cli
 | `GET /categories` | Done, tested |
 | `PUT /categories/{id}` | Done, tested |
 | `DELETE /categories/{id}` | Done, tested |
-| Transactions: create, list, edit, delete | Planned |
+| `POST /transactions` | Done, tested |
+| `GET /transactions` | Done, tested |
+| `PUT /transactions/{id}` | Done, tested |
+| `DELETE /transactions/{id}` | Done, tested |
 
 Planned endpoints are tracked in [issue #3](https://github.com/Polihronos/finance-php/issues/3).
 
@@ -47,8 +50,11 @@ src/Router.php        Matches method and path to a handler, with one numeric {id
 src/Request.php       Reads the JSON request body.
 src/Auth.php          Register, login, logout, and the token check for protected endpoints.
 src/Categories.php    Create, list, rename and delete the logged-in user's categories.
+src/Transactions.php  Create, list, edit and delete the logged-in user's transactions.
+src/HttpException.php An error with an HTTP status. Throwing it sends that status and message.
 src/Database.php      Opens the database connection from the .env settings.
-src/ErrorHandler.php  Turns any unplanned failure into a 500 JSON answer and logs the details.
+src/ErrorHandler.php  Answers a thrown HttpException with its status and message. Turns any other
+                      failure into a 500 JSON answer and logs the details.
 create_tables.php     Creates the tables. Safe to run again.
 tests/                PHPUnit tests that call the real API.
 docs/images/          Diagrams.
@@ -343,6 +349,119 @@ No request body. `200 OK`:
 | `404` | `category not found` | No such category for this user |
 | `409` | `category is used by transactions` | Transactions still use this category |
 
+### Transactions
+
+All transaction endpoints are protected and only see the logged-in user's own transactions. A
+transaction of another user gets the same `404` as one that does not exist. Every transaction
+endpoint can also answer `401` with `not logged in`.
+
+Create and edit check the fields the same way:
+
+| Field | Required | Rule |
+|---|---|---|
+| `category_id` | yes | A whole number: the id of one of your own categories |
+| `amount` | yes | A number above 0 with at most 2 decimals, at most `9999999999.99` |
+| `currency` | no | Left out means `EUR`. Only `EUR` is allowed for now. Capitals are ignored. |
+| `date` | yes | A real date written as `YYYY-MM-DD` |
+| `payment_method` | yes | `cash` or `card`. Capitals are ignored. |
+| `description` | no | Text, at most 255 characters |
+| `place` | no | Text, at most 255 characters |
+
+Spaces at the start and end of text are removed before saving. A `description` or `place` that is
+empty or only spaces is saved as `null`.
+
+| Status | Error | When |
+|---|---|---|
+| `400` | `request body must be JSON` | The body is not a JSON object |
+| `400` | `category_id is required` (or `amount`, `date`, `payment_method`) | Missing or `null`. For text fields also empty or only spaces. |
+| `400` | `category_id must be a whole number` | Text, a number with decimals, or another non-whole-number value |
+| `400` | `category not found` | No such category for this user |
+| `400` | `amount must be a number` | Text, `true`/`false`, a list or another non-number value |
+| `400` | `amount must be more than 0` | 0 or negative |
+| `400` | `amount must be at most 9999999999.99` | Too large for the database column |
+| `400` | `amount must have at most 2 decimals` | For example `12.345` |
+| `400` | `currency must be text` (or `date`, `payment_method`, `description`, `place`) | A number, list or other non-text value |
+| `400` | `currency must be at most 3 characters` (or `date` 10, `payment_method` 50, `description` and `place` 255) | Longer than allowed, counted after trimming |
+| `400` | `currency must be one of: EUR` | Any currency other than EUR |
+| `400` | `date must be in YYYY-MM-DD format` | For example `12.10.2026` |
+| `400` | `date is not a real date` | For example `2026-02-30` or `2026-13-01` |
+| `400` | `payment_method must be one of: cash, card` | Any other payment method |
+
+The fields are checked in the order of the field table, and the first wrong one is answered.
+
+Every answer that contains a transaction shows it the same way. `amount` is text with 2 decimals,
+so cents stay exact:
+
+```json
+{
+  "id": 1,
+  "category_id": 1,
+  "amount": "12.50",
+  "currency": "EUR",
+  "date": "2026-10-12",
+  "payment_method": "card",
+  "description": "Lunch",
+  "place": null
+}
+```
+
+### `POST /transactions`
+
+```json
+{"category_id": 1, "amount": 12.5, "date": "2026-10-12", "payment_method": "card", "description": "Lunch"}
+```
+
+`201 Created`, with the saved transaction:
+
+```json
+{"success": true, "transaction": {"id": 1, "category_id": 1, "amount": "12.50", "currency": "EUR", "date": "2026-10-12", "payment_method": "card", "description": "Lunch", "place": null}}
+```
+
+### `GET /transactions`
+
+No request body. `200 OK`, newest date first. Transactions on the same date show the one added last
+first.
+
+```json
+{"transactions": [{"id": 2, "category_id": 1, "amount": "4.20", "currency": "EUR", "date": "2026-10-12", "payment_method": "cash", "description": null, "place": null}, {"id": 1, "category_id": 1, "amount": "12.50", "currency": "EUR", "date": "2026-10-01", "payment_method": "card", "description": "Lunch", "place": null}]}
+```
+
+A user without transactions gets `{"transactions": []}`.
+
+### `PUT /transactions/{id}`
+
+Edits a transaction. The body has the same fields as create and replaces all of them, so a
+`description` or `place` that is left out becomes `null`.
+
+```json
+{"category_id": 1, "amount": 15, "date": "2026-10-12", "payment_method": "cash", "description": "Lunch", "place": "Office"}
+```
+
+`200 OK`, with the saved transaction:
+
+```json
+{"success": true, "transaction": {"id": 1, "category_id": 1, "amount": "15.00", "currency": "EUR", "date": "2026-10-12", "payment_method": "cash", "description": "Lunch", "place": "Office"}}
+```
+
+| Status | Error | When |
+|---|---|---|
+| `404` | `transaction not found` | No such transaction for this user |
+
+The fields are checked before the transaction is looked up, so a wrong body gets `400` even for an
+unknown id. Saving the same values again succeeds.
+
+### `DELETE /transactions/{id}`
+
+No request body. `200 OK`:
+
+```json
+{"success": true}
+```
+
+| Status | Error | When |
+|---|---|---|
+| `404` | `transaction not found` | No such transaction for this user |
+
 ## Tests
 
 macOS:
@@ -369,4 +488,5 @@ from the same state.
 | `tests/LoginTest.php` | Successful login, body and field checks, wrong and unknown credentials, email capitals |
 | `tests/LogoutTest.php` | Logout of one session, and the token check: missing, malformed, unknown, reused and expired tokens |
 | `tests/CategoriesTest.php` | Create, list, rename and delete: name checks, duplicates, sorting, other users' categories, categories used by transactions, token check |
+| `tests/TransactionsTest.php` | Create, list, edit and delete: checks for every field, defaults and cleanup of values, sorting, other users' transactions and categories, token check |
 | `tests/ApiTestCase.php` | Shared setup: test server, database reset, `post()`, `put()`, `get()` and `delete()` (plus `postRaw()` and `putRaw()` for bodies that are not JSON) with optional extra headers, `countUsers()`, `countSessions()` |
