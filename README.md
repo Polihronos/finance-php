@@ -1,7 +1,8 @@
-# Finance PHP
+# Finance
 
-A JSON API for tracking personal spending: users, categories and transactions. Plain PHP with
-MariaDB, no framework. A Vue web app and a Flutter mobile app are planned as clients.
+Tracks personal spending: users, categories and transactions. The JSON API in `api/` is plain
+PHP with MariaDB, no framework. A Vue web app and a Flutter mobile app are planned as clients,
+each in its own folder next to `api/`.
 
 ## Status
 
@@ -44,6 +45,16 @@ Deletion rules:
 ## Project structure
 
 ```
+api/                  The PHP API. Every PHP command in this README runs from this folder.
+docs/images/          Diagrams.
+README.md             This file.
+```
+
+Planned next to `api/`: `web/` for the Vue app and `mobile/` for the Flutter app.
+
+Inside `api/`:
+
+```
 public/index.php      Entry point. Loads config, turns on error handling, registers routes.
 src/Router.php        Matches method and path to a handler, with one numeric {id} in the path.
                       Unknown routes answer 404.
@@ -57,7 +68,9 @@ src/ErrorHandler.php  Answers a thrown HttpException with its status and message
                       failure into a 500 JSON answer and logs the details.
 create_tables.php     Creates the tables. Safe to run again.
 tests/                PHPUnit tests that call the real API.
-docs/images/          Diagrams.
+composer.json         PHP packages and the App\ autoloading.
+phpunit.xml           Test settings.
+.env.example          Template for .env and .env.testing.
 ```
 
 Classes in `src/` use the `App\` namespace and are loaded by Composer, so no file needs a
@@ -86,10 +99,17 @@ Clone and install:
 
 ```powershell
 git clone https://github.com/Polihronos/finance-php.git
-cd finance-php
+cd finance-php\api
 composer install
 Copy-Item .env.example .env
 Copy-Item .env.example .env.testing
+```
+
+A clone from before the API moved into `api/` keeps `vendor`, `.env` and `.env.testing` at the
+top, because Git does not track them. After pulling, move them once from the `finance-php` folder:
+
+```powershell
+Move-Item vendor, .env, .env.testing api
 ```
 
 ### macOS
@@ -107,10 +127,17 @@ Clone and install:
 
 ```bash
 git clone https://github.com/Polihronos/finance-php.git
-cd finance-php
+cd finance-php/api
 composer install
 cp .env.example .env
 cp .env.example .env.testing
+```
+
+A clone from before the API moved into `api/` keeps `vendor`, `.env` and `.env.testing` at the
+top, because Git does not track them. After pulling, move them once from the `finance-php` folder:
+
+```bash
+mv vendor .env .env.testing api/
 ```
 
 ### Databases
@@ -129,13 +156,13 @@ GRANT ALL PRIVILEGES ON finance_app.* TO 'your_user'@'localhost';
 GRANT ALL PRIVILEGES ON finance_app_test.* TO 'your_user'@'localhost';
 ```
 
-Set your credentials in `.env` and `.env.testing`. In `.env.testing`, set
-`DB_DATABASE=finance_app_test`. Neither file is committed.
+Set your credentials in `api/.env` and `api/.env.testing`. In `.env.testing`, set
+`DB_DATABASE=finance_app_test` and `BCRYPT_COST=4`. Neither file is committed.
 
 ### Tables
 
-Create the tables in both databases. Running it again only adds what is missing and keeps
-existing data.
+Create the tables in both databases, from the `api` folder. Running it again only adds what is
+missing and keeps existing data.
 
 macOS:
 
@@ -162,7 +189,7 @@ ALTER TABLE categories ADD UNIQUE KEY user_category_name (user_id, name);
 
 ## Run
 
-From the project root:
+From the `api` folder:
 
 ```sh
 php -S localhost:8000 -t public
@@ -464,7 +491,7 @@ No request body. `200 OK`:
 
 ## Tests
 
-macOS:
+From the `api` folder. macOS:
 
 ```bash
 vendor/bin/phpunit

@@ -1,9 +1,9 @@
-/vendor/
+/api/vendor/
 .env
 .env.*
 !.env.example
-/uploads/
-/storage/
+/api/uploads/
+/api/storage/
 *.log
 AGENTS.md
 claude.md
