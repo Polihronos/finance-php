@@ -14,9 +14,6 @@ class Categories
     public function create(int $userId): void
     {
         $name = $this->readName();
-        if ($name === null) {
-            return;
-        }
 
         $stmt = $this->pdo->prepare(
             'INSERT INTO categories (user_id, name) VALUES (:user_id, :name)'
@@ -31,9 +28,7 @@ class Categories
             $categoryId = (int) $this->pdo->lastInsertId();
         } catch (PDOException $e) {
             if ($e->getCode() === '23000') {
-                http_response_code(409);
-                echo json_encode(['error' => 'category already exists']);
-                return;
+                throw new HttpException(409, 'category already exists');
             }
             throw $e;
         }
@@ -64,9 +59,6 @@ class Categories
     public function update(int $userId, int $id): void
     {
         $name = $this->readName();
-        if ($name === null) {
-            return;
-        }
 
         $stmt = $this->pdo->prepare(
             'UPDATE categories SET name = :name WHERE id = :id AND user_id = :user_id'
@@ -81,17 +73,13 @@ class Categories
 
         } catch (PDOException $e) {
             if ($e->getCode() === '23000') {
-                http_response_code(409);
-                echo json_encode(['error' => 'category already exists']);
-                return;
+                throw new HttpException(409, 'category already exists');
             }
             throw $e;
         }
 
         if ($stmt->rowCount() === 0) {
-            http_response_code(404);
-            echo json_encode(['error' => 'category not found']);
-            return;
+            throw new HttpException(404, 'category not found');
         }
 
         http_response_code(200);
@@ -116,17 +104,13 @@ class Categories
 
         } catch (PDOException $e) {
             if ($e->getCode() === '23000') {
-                http_response_code(409);
-                echo json_encode(['error' => 'category is used by transactions']);
-                return;
+                throw new HttpException(409, 'category is used by transactions');
             }
             throw $e;
         }
 
         if ($stmt->rowCount() === 0) {
-            http_response_code(404);
-            echo json_encode(['error' => 'category not found' ]);
-            return;
+            throw new HttpException(404, 'category not found');
         }
 
         http_response_code(200);
@@ -136,39 +120,29 @@ class Categories
 
     }
 
-    private function readName(): ?string
+    private function readName(): string
     {
         $data = Request::json();
 
         if ($data === null) {
-            http_response_code(400);
-            echo json_encode(['error' => 'request body must be JSON']);
-            return null;
+            throw new HttpException(400, 'request body must be JSON');
         }
 
         if (!isset($data['name'])) {
-            http_response_code(400);
-            echo json_encode(['error' => "name is required"]);
-            return null;
+            throw new HttpException(400, "name is required");
         }
 
         if (!is_string($data['name'])) {
-            http_response_code(400);
-            echo json_encode(['error' => "name must be text"]);
-            return null;
+            throw new HttpException(400, "name must be text");
         }
 
         $data['name'] = mb_trim($data['name']);
         if ($data['name'] === '') {
-            http_response_code(400);
-            echo json_encode(['error' => "name is required"]);
-            return null;
+            throw new HttpException(400, "name is required");
         }
 
         if (mb_strlen($data['name']) > 100) {
-            http_response_code(400);
-            echo json_encode(['error' => "name must be at most 100 characters"]);
-            return null;
+            throw new HttpException(400, "name must be at most 100 characters");
         }
 
         return $data['name'];

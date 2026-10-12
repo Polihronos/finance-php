@@ -20,22 +20,16 @@ class Auth
         $data = Request::json();
 
         if ($data === null) {
-            http_response_code(400);
-            echo json_encode(['error' => 'request body must be JSON']);
-            return;
+            throw new HttpException(400, 'request body must be JSON');
         }
 
         foreach (['name', 'email', 'password'] as $field) {
             if (!isset($data[$field])) {
-                http_response_code(400);
-                echo json_encode(['error' => "$field is required"]);
-                return;
+                throw new HttpException(400, "$field is required");
             }
 
             if (!is_string($data[$field])) {
-                http_response_code(400);
-                echo json_encode(['error' => "$field must be text"]);
-                return;
+                throw new HttpException(400, "$field must be text");
             }
         }
 
@@ -43,31 +37,27 @@ class Auth
 
         foreach (['name', 'email', 'password'] as $field) {
             if ($data[$field] === '') {
-                http_response_code(400);
-                echo json_encode(['error' => "$field is required"]);
-                return;
+                throw new HttpException(400, "$field is required");
             }
         }
 
         if (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
-            http_response_code(400);
-            echo json_encode(['error' => 'invalid email']);
-            return;
+            throw new HttpException(400, 'invalid email');
         }
 
         if (mb_strlen($data['password']) < 8) {
-            http_response_code(400);
-            echo json_encode(['error' => 'password must be at least 8 characters']);
-            return;
+            throw new HttpException(400, 'password must be at least 8 characters');
         }
 
         if (mb_strlen($data['password']) > 36) {
-            http_response_code(400);
-            echo json_encode(['error' => 'password must be less than 36 characters']);
-            return;
+            throw new HttpException(400, 'password must be less than 36 characters');
         }
 
-        $hash = password_hash($data['password'], PASSWORD_DEFAULT);
+        // .env.testing sets BCRYPT_COST=4 because hashing at cost 12 was most of the test time.
+        // Without it, real users get cost 12, the same as DUMMY_HASH, so login timing stays equal.
+        $hash = password_hash($data['password'], PASSWORD_DEFAULT, [
+            'cost' => (int) ($_ENV['BCRYPT_COST'] ?? 12),
+        ]);
 
         $stmt = $this->pdo->prepare(
             'INSERT INTO users (name, email, password_hash) VALUES (:name, :email, :hash)'
@@ -90,9 +80,7 @@ class Auth
             $this->pdo->rollBack();
 
             if ($e instanceof PDOException && $e->getCode() === '23000') {
-                http_response_code(409);
-                echo json_encode(['error' => 'email already registered']);
-                return;
+                throw new HttpException(409, 'email already registered');
             }
             throw $e;
         }
@@ -110,22 +98,16 @@ class Auth
         $data = Request::json();
 
         if ($data === null) {
-            http_response_code(400);
-            echo json_encode(['error' => 'request body must be JSON']);
-            return;
+            throw new HttpException(400, 'request body must be JSON');
         }
 
         foreach (['email', 'password'] as $field) {
             if (!isset($data[$field])) {
-                http_response_code(400);
-                echo json_encode(['error' => "$field is required"]);
-                return;
+                throw new HttpException(400, "$field is required");
             }
 
             if (!is_string($data[$field])) {
-                http_response_code(400);
-                echo json_encode(['error' => "$field must be text"]);
-                return;
+                throw new HttpException(400, "$field must be text");
             }
         }
         // look up the user by email
@@ -139,9 +121,7 @@ class Auth
         $passwordCorrect = password_verify($data['password'], $hash);
 
         if ($user === false || !$passwordCorrect) {
-            http_response_code(401);
-            echo json_encode(['error' => 'invalid email or password']);
-            return;
+            throw new HttpException(401, 'invalid email or password');
         }
 
         $token = $this->createSession($user['id']);
@@ -154,14 +134,12 @@ class Auth
         ]);
     }
 
-    public function requireUserId(): ?int
+    public function requireUserId(): int
     {
         $header = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
 
         if (!preg_match('/^Bearer ([0-9a-f]{64})$/', $header, $matches)) {
-            http_response_code(401);
-            echo json_encode(['error' => 'not logged in']);
-            return null;
+            throw new HttpException(401, 'not logged in');
         }
 
         $stmt = $this->pdo->prepare(
@@ -172,16 +150,12 @@ class Auth
         $session = $stmt->fetch();
 
         if ($session === false) {
-            http_response_code(401);
-            echo json_encode(['error' => 'not logged in']);
-            return null;
+            throw new HttpException(401, 'not logged in');
         }
 
         if (!$session['active']) {
             $this->pdo->exec('DELETE FROM sessions WHERE expires_at <= NOW()');
-            http_response_code(401);
-            echo json_encode(['error' => 'not logged in']);
-            return null;
+            throw new HttpException(401, 'not logged in');
         }
 
         return $session['user_id'];
@@ -189,10 +163,7 @@ class Auth
 
     public function logout(): void
     {
-        $userId = $this->requireUserId();
-        if ($userId === null) {
-            return;
-        }
+        $this->requireUserId();
 
         $stmt = $this->pdo->prepare('DELETE FROM sessions WHERE token_hash = :token_hash');
         $stmt->execute(['token_hash' => $this->tokenHash]);

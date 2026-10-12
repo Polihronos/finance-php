@@ -40,65 +40,41 @@ $router->post('/logout', function () use ($auth) {
 
 $router->post('/categories', function () use ($auth, $categories) {
     $userId = $auth->requireUserId();
-    if ($userId === null) {
-        return;
-    }
     $categories->create($userId);
 });
 
 $router->get('/categories', function () use ($auth, $categories) {
     $userId = $auth->requireUserId();
-    if ($userId === null) {
-        return;
-    }
     $categories->list($userId);
 });
 
 $router->put('/categories/{id}', function (int $id) use ($auth, $categories) {
     $userId = $auth->requireUserId();
-    if ($userId === null) {
-        return;
-    }
     $categories->update($userId, $id);
 });
 
 $router->delete('/categories/{id}', function (int $id) use ($auth, $categories) {
     $userId = $auth->requireUserId();
-    if ($userId === null) {
-        return;
-    }
     $categories->delete($userId, $id);
 });
 
 $router->post('/transactions', function () use ($auth, $transactions) {
     $userId = $auth->requireUserId();
-    if ($userId === null) {
-        return;
-    }
     $transactions->create($userId);
 });
 
 $router->get('/transactions', function () use ($auth, $transactions) {
     $userId = $auth->requireUserId();
-    if ($userId === null) {
-        return;
-    }
     $transactions->list($userId);
 });
 
 $router->put('/transactions/{id}', function (int $id) use ($auth, $transactions) {
     $userId = $auth->requireUserId();
-    if ($userId === null) {
-        return;
-    }
     $transactions->update($userId, $id);
 });
 
 $router->delete('/transactions/{id}', function (int $id) use ($auth, $transactions) {
     $userId = $auth->requireUserId();
-    if ($userId === null) {
-        return;
-    }
     $transactions->delete($userId, $id);
 });
 
