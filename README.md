@@ -1,10 +1,12 @@
 # Finance
 
 Tracks personal spending: users, categories and transactions. The JSON API in `api/` is plain
-PHP with MariaDB, no framework. A Vue web app and a Flutter mobile app are planned as clients,
-each in its own folder next to `api/`.
+PHP with MariaDB, no framework. The Vue web app in `web/` is its first client and is in progress.
+A Flutter mobile app is planned in `mobile/`.
 
 ## Status
+
+API:
 
 | Endpoint | State |
 |---|---|
@@ -21,6 +23,18 @@ each in its own folder next to `api/`.
 | `DELETE /transactions/{id}` | Done, tested |
 
 Planned endpoints are tracked in [issue #3](https://github.com/Polihronos/finance-php/issues/3).
+
+Web app:
+
+| Screen | State |
+|---|---|
+| Log in | Done, logic tested |
+| Create account | Done, logic tested |
+| Log out and expired sessions | Done, logic tested |
+| Protected screens | Done |
+| Transactions | Started: the screen and its header exist, the list does not yet |
+| Add and edit transaction | Planned |
+| Categories | Planned |
 
 ## Database design
 
@@ -46,11 +60,12 @@ Deletion rules:
 
 ```
 api/                  The PHP API. Every PHP command in this README runs from this folder.
+web/                  The Vue web app. Every npm command in this README runs from this folder.
 docs/images/          Diagrams.
 README.md             This file.
 ```
 
-Planned next to `api/`: `web/` for the Vue app and `mobile/` for the Flutter app.
+Planned next to them: `mobile/` for the Flutter app.
 
 Inside `api/`:
 
@@ -76,9 +91,33 @@ phpunit.xml           Test settings.
 Classes in `src/` use the `App\` namespace and are loaded by Composer, so no file needs a
 `require` for them.
 
+Inside `web/`:
+
+```
+src/main.ts                       Entry point. Loads the font and styles, starts Vue with Pinia and
+                                  the router, and sends the user to log in when the API answers 401.
+src/App.vue                       Shows the screen of the current route.
+src/router/index.ts               The routes, and the guard that keeps logged-out users on log in.
+src/api/client.ts                 request(): every API call goes through it. Adds the token, sends
+                                  and reads JSON, and turns an error answer into an ApiError.
+src/api/types.ts                  The shapes of the API's answers.
+src/api/auth.ts                   register(), login() and logout(): one function per endpoint.
+src/stores/auth.ts                The token: kept in memory, in localStorage and in client.ts.
+src/views/                        One file per screen: LoginView, RegisterView, TransactionsView.
+src/components/AppLayout.vue      Header with the Log out button, around every protected screen.
+src/components/AppButton.vue      The only button: always an icon, with text or icon only.
+src/components/AppError.vue       The error note shown in forms.
+src/components/PasswordInput.vue  Password field with a button to show or hide the password.
+src/assets/main.css               Colors, font, page layout, form fields and links.
+src/**/__tests__/                 Vitest tests.
+vite.config.ts                    Dev server, and the /api forwarding to the PHP API.
+package.json                      npm packages and scripts.
+```
+
 ## Setup
 
-Requires PHP 8.4 or newer with `pdo_mysql`, Composer, and MariaDB.
+The API requires PHP 8.4 or newer with `pdo_mysql`, Composer, and MariaDB. The web app requires
+Node.js 22.18 or newer (or 24.12 or newer).
 
 ### Windows
 
@@ -187,15 +226,32 @@ became unique need this once, in both databases:
 ALTER TABLE categories ADD UNIQUE KEY user_category_name (user_id, name);
 ```
 
+### Web app
+
+From the `web` folder, the same on macOS and Windows:
+
+```bash
+npm install
+```
+
 ## Run
 
-From the `api` folder:
+The API, from the `api` folder:
 
 ```sh
 php -S localhost:8000 -t public
 ```
 
 The API answers on `localhost:8000`. Errors and their details appear in this terminal.
+
+The web app, in a second terminal, from the `web` folder:
+
+```bash
+npm run dev
+```
+
+Open `localhost:5173`. The web app forwards every request that starts with `/api` to the API on
+port 8000, so the browser only ever talks to one address and the API needs no CORS settings.
 
 ## API
 
@@ -489,7 +545,56 @@ No request body. `200 OK`:
 |---|---|---|
 | `404` | `transaction not found` | No such transaction for this user |
 
+## Web app
+
+Plain Vue 3 with TypeScript, Vue Router and Pinia. No UI library: the look comes from
+`src/assets/main.css` and four small components.
+
+### How a request travels
+
+```
+Screen (LoginView)          shows the form, shows the error
+   ↓
+Store (stores/auth.ts)      keeps the token
+   ↓
+API function (api/auth.ts)  one function per endpoint
+   ↓
+request() (api/client.ts)   token header, JSON, errors
+   ↓
+/api/login → Vite forwards it → PHP API /login
+```
+
+Each layer only calls the one below it. `client.ts` knows nothing about the store or the router.
+
+### Login in the browser
+
+| Moment | What happens |
+|---|---|
+| Log in or create account | The token from the API is saved in the store, in `localStorage` and in `client.ts` |
+| Page reload | The token is read back from `localStorage`, so the user stays logged in |
+| Opening a screen | Every screen needs a token unless its route has `meta: { guest: true }`. Log in and create account are the only guest screens. Without a token the user goes to log in, with one a guest screen sends them to Transactions |
+| Log out | The API ends the session. The token is removed on this device even when that call fails |
+| Any answer `401` while logged in | The session expired or was ended elsewhere: the token is removed and the user goes to log in. A `401` without a token, a wrong password, does not do this |
+
+The API stays the only judge of what is valid. The browser only checks what is cheap to check
+early: required fields, the email format and the password length.
+
+### Design
+
+| | |
+|---|---|
+| Colors | `--text`, `--background`, `--primary`, `--secondary`, `--accent` in `main.css` |
+| Font | Montserrat, Latin and Cyrillic, served from the app itself through `@fontsource-variable/montserrat` |
+| Icons | Lucide through `@lucide/vue`. Only the icons that are imported end up in the app |
+| Buttons | Always `AppButton`: an icon plus text, or only an icon with its text as the accessible name and tooltip. `variant="quiet"` drops the red fill |
+| Errors | `AppError`: a yellow note with a stripe and a ghost icon, above the form's button |
+
+Text is always shown with `{{ }}`, which Vue escapes. ESLint refuses `v-html`, so text from the API
+can never run as code in the page.
+
 ## Tests
+
+### API
 
 From the `api` folder. macOS:
 
@@ -517,3 +622,31 @@ from the same state.
 | `tests/CategoriesTest.php` | Create, list, rename and delete: name checks, duplicates, sorting, other users' categories, categories used by transactions, token check |
 | `tests/TransactionsTest.php` | Create, list, edit and delete: checks for every field, defaults and cleanup of values, sorting, other users' transactions and categories, token check |
 | `tests/ApiTestCase.php` | Shared setup: test server, database reset, `post()`, `put()`, `get()` and `delete()` (plus `postRaw()` and `putRaw()` for bodies that are not JSON) with optional extra headers, `countUsers()`, `countSessions()` |
+
+### Web app
+
+From the `web` folder:
+
+```bash
+npm run test:unit
+```
+
+It keeps watching and runs the tests again on every save. Press `q` to stop.
+
+The tests run without the API: `fetch` is replaced by a fake that gives the answer each test
+needs.
+
+| File | Covers |
+|---|---|
+| `src/api/__tests__/client.spec.ts` | The path, JSON body and token header of every request, success and error answers, answers that are not JSON, and which `401` answers call the handler set with `setUnauthorizedHandler()` |
+| `src/api/__tests__/auth.spec.ts` | Register, login and logout: what each sends, what it returns, and that API errors reach the caller |
+| `src/stores/__tests__/auth.spec.ts` | The token after start, login, register, logout and forget, in the store, in `localStorage` and in the requests that follow, also when the API fails |
+| `src/api/__tests__/fakeFetch.ts` | Shared helper: replaces `fetch` with a fake that answers with a given status and body |
+
+Other checks, from the same folder:
+
+| Command | Does |
+|---|---|
+| `npm run type-check` | Checks the TypeScript types |
+| `npm run lint` | Runs Oxlint and ESLint. It also fixes what it can, so it may change files |
+| `npm run format` | Formats `src/` with Prettier |
