@@ -28,5 +28,12 @@ export default defineConfigWithVueTs(
 
   ...pluginOxlint.buildFromOxlintConfigFile('.oxlintrc.json'),
 
+  {
+    name: 'app/security',
+    rules: {
+      'vue/no-v-html': 'error',
+    },
+  },
+
   skipFormatting,
 )

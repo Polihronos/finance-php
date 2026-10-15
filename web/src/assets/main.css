@@ -1,0 +1,82 @@
+:root {
+  --text: #10081b;
+  --background: #fbf4ee;
+  --primary: #de0d22;
+  --secondary: #ff4800;
+  --accent: #fdb308;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Montserrat Variable', system-ui, sans-serif;
+  background: var(--background);
+  color: var(--text);
+}
+
+main {
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 3rem 1rem;
+}
+
+h1 {
+  margin: 0 0 1.5rem;
+  text-align: center;
+}
+
+form {
+  display: grid;
+  gap: 1rem;
+}
+
+label {
+  display: grid;
+  gap: 0.25rem;
+  font-weight: 500;
+}
+
+input,
+select {
+  min-height: 2.75rem;
+  padding: 0 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--text), transparent 70%);
+  border-radius: 0.5rem;
+  background: white;
+  color: inherit;
+  font: inherit;
+}
+
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.centered {
+  display: grid;
+  align-content: center;
+  min-height: 100dvh;
+  padding-bottom: 20dvh;
+}
+
+.centered > p {
+  margin: 1.5rem 0 0;
+  text-align: center;
+  color: color-mix(in srgb, var(--text), transparent 30%);
+}
+
+a {
+  color: var(--primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
