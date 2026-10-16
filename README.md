@@ -20,6 +20,7 @@ API:
 | `DELETE /categories/{id}` | Done, tested |
 | `POST /transactions` | Done, tested |
 | `GET /transactions` | Done, tested |
+| `GET /transactions/suggestions` | Done, tested |
 | `PUT /transactions/{id}` | Done, tested |
 | `DELETE /transactions/{id}` | Done, tested |
 
@@ -54,6 +55,9 @@ Deletion rules:
 - Deleting a user also deletes that user's sessions, categories and transactions.
 - A category cannot be deleted while transactions still use it.
 
+`transactions` has an index on `(user_id, description)`, so suggestions find a user's matching
+descriptions without reading all of their transactions.
+
 ## API request flow
 
 ![API flow](docs/images/api-flow.png)
@@ -79,7 +83,7 @@ src/Request.php       Reads the JSON request body.
 src/Auth.php          Register, login, logout, and the token check for protected endpoints.
 src/Categories.php    Create, list, rename and delete the logged-in user's categories, and their
                       spending stats.
-src/Transactions.php  Create, list, edit and delete the logged-in user's transactions.
+src/Transactions.php  Create, list, edit and delete the logged-in user's transactions, and suggest descriptions.
 src/HttpException.php An error with an HTTP status. Throwing it sends that status and message.
 src/Database.php      Opens the database connection from the .env settings.
 src/ErrorHandler.php  Answers a thrown HttpException with its status and message. Turns any other
@@ -228,8 +232,9 @@ $env:APP_ENV = 'testing'; php create_tables.php; Remove-Item Env:APP_ENV
 
 `APP_ENV=testing` makes the script read `.env.testing` instead of `.env`.
 
-The script does not change tables that already exist. Databases created before category names
-became unique need this once, in both databases:
+The script does not change tables that already exist, except that it adds the `user_description`
+index to `transactions` when it is missing. Databases created before category names became unique
+need this once, in both databases:
 
 ```sql
 ALTER TABLE categories ADD UNIQUE KEY user_category_name (user_id, name);
@@ -537,6 +542,34 @@ first.
 
 A user without transactions gets `{"transactions": []}`.
 
+### `GET /transactions/suggestions`
+
+Suggests descriptions you already used, for autocomplete while typing. No request body; the text
+typed so far goes in `q`:
+
+```
+GET /transactions/suggestions?q=ga
+```
+
+`200 OK`, at most 8 suggestions:
+
+```json
+{"suggestions": [{"description": "Gas", "category_id": 2, "place": "OMV"}, {"description": "Garage", "category_id": 2, "place": null}]}
+```
+
+- Only descriptions that start with `q` match. Capitals are ignored, and spaces around `q` are removed.
+- Each description appears once. The most used come first, and ties are sorted by name.
+- `category_id` and `place` come from the newest transaction with that description, so picking a
+  suggestion can fill them in too.
+- `%` and `_` in `q` are plain text, so `q=%` does not match everything.
+- A user without matching transactions gets `{"suggestions": []}`.
+
+| Status | Error | When |
+|---|---|---|
+| `400` | `q is required` | Missing, empty or only spaces |
+| `400` | `q must be text` | A list, for example `q[]=ga` |
+| `400` | `q must be at most 255 characters` | Longer than a description can be, counted after trimming |
+
 ### `PUT /transactions/{id}`
 
 Edits a transaction. The body has the same fields as create and replaces all of them, so a
@@ -659,7 +692,7 @@ from the same state.
 | `tests/LoginTest.php` | Successful login, body and field checks, wrong and unknown credentials, email capitals |
 | `tests/LogoutTest.php` | Logout of one session, and the token check: missing, malformed, unknown, reused and expired tokens |
 | `tests/CategoriesTest.php` | Create, list, rename and delete: name checks, duplicates, sorting, other users' categories, categories used by transactions, token check. Stats: monthly average, empty months, rounding, future dates, other users' data |
-| `tests/TransactionsTest.php` | Create, list, edit and delete: checks for every field, defaults and cleanup of values, sorting, other users' transactions and categories, token check |
+| `tests/TransactionsTest.php` | Create, list, edit and delete: checks for every field, defaults and cleanup of values, sorting, other users' transactions and categories, token check. Suggestions: matching the start, capitals, one per description, order, newest category and place, at most 8, `%` and `_` as plain text, query checks |
 | `tests/ApiTestCase.php` | Shared setup: test server, database reset, `post()`, `put()`, `get()` and `delete()` (plus `postRaw()` and `putRaw()` for bodies that are not JSON) with optional extra headers, `countUsers()`, `countSessions()` |
 
 ### Web app

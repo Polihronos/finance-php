@@ -73,6 +73,11 @@ $router->get('/transactions', function () use ($auth, $transactions) {
     $transactions->list($userId);
 });
 
+$router->get('/transactions/suggestions', function () use ($auth, $transactions) {
+    $userId = $auth->requireUserId();
+    $transactions->suggestions($userId);
+});
+
 $router->put('/transactions/{id}', function (int $id) use ($auth, $transactions) {
     $userId = $auth->requireUserId();
     $transactions->update($userId, $id);

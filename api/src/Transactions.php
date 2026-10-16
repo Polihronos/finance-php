@@ -233,4 +233,31 @@ class Transactions
         http_response_code(200);
         echo json_encode(['success' => true]);
     }
+
+    public function suggestions(int $userId): void
+    {
+        $query = $this->readText($_GET, 'q', 255)
+            ?? throw new HttpException(400, 'q is required');
+
+        $stmt = $this->pdo->prepare(
+            'SELECT description, category_id, place
+            FROM (
+                SELECT description, category_id, place,
+                    ROW_NUMBER() OVER (PARTITION BY description ORDER BY date DESC, id DESC) AS row_num,
+                    COUNT(*) OVER (PARTITION BY description) AS uses
+                FROM transactions
+                WHERE user_id = :user_id AND description LIKE :prefix
+            ) AS matches
+            WHERE row_num = 1
+            ORDER BY uses DESC, description
+            LIMIT 8'
+        );
+        $stmt->execute([
+            'user_id' => $userId,
+            'prefix' => addcslashes($query, '%_\\') . '%',
+        ]);
+
+        http_response_code(200);
+        echo json_encode(['suggestions' => $stmt->fetchAll()]);
+    }
 }

@@ -1021,6 +1021,299 @@ class TransactionsTest extends ApiTestCase
         $this->assertSame(1, $this->countTransactions());
     }
 
+    // Successful suggestions: GET /transactions/suggestions?q= returns the logged-in user's descriptions that start with q
+
+    public function test_suggest_transactions_empty(): void
+    {
+        $user = $this->registerUser();
+
+        $response = $this->suggestTransactions($user['token'], 'lu');
+
+        $this->assertSame(200, $response['status']);
+        $this->assertSame(['suggestions' => []], $response['body']);
+    }
+
+    public function test_suggest_transactions(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Food');
+        $this->createTransaction($user['token'], $this->transactionBody());
+
+        $response = $this->suggestTransactions($user['token'], 'lu');
+
+        $this->assertSame(200, $response['status']);
+        $this->assertSame([
+            'suggestions' => [
+                [
+                    'description' => 'Lunch',
+                    'category_id' => 1,
+                    'place' => 'Office',
+                ],
+            ],
+        ], $response['body']);
+    }
+
+    public function test_suggest_transactions_matches_start_only(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Food');
+        $this->createTransaction($user['token'], $this->transactionBody(1, ['description' => 'Lunch']));
+        $this->createTransaction($user['token'], $this->transactionBody(1, ['description' => 'Brunch']));
+
+        $response = $this->suggestTransactions($user['token'], 'lu');
+
+        $this->assertSame(200, $response['status']);
+        $this->assertSame(['Lunch'], array_column($response['body']['suggestions'], 'description'));
+    }
+
+    public function test_suggest_transactions_ignores_case(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Food');
+        $this->createTransaction($user['token'], $this->transactionBody());
+
+        $response = $this->suggestTransactions($user['token'], 'LU');
+
+        $this->assertSame(200, $response['status']);
+        $this->assertSame(['Lunch'], array_column($response['body']['suggestions'], 'description'));
+    }
+
+    public function test_suggest_transactions_trims_query(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Food');
+        $this->createTransaction($user['token'], $this->transactionBody());
+
+        $response = $this->suggestTransactions($user['token'], '  lu  ');
+
+        $this->assertSame(200, $response['status']);
+        $this->assertSame(['Lunch'], array_column($response['body']['suggestions'], 'description'));
+    }
+
+    public function test_suggest_transactions_one_per_description(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Food');
+        $this->createTransaction($user['token'], $this->transactionBody());
+        $this->createTransaction($user['token'], $this->transactionBody());
+        $this->createTransaction($user['token'], $this->transactionBody());
+
+        $response = $this->suggestTransactions($user['token'], 'lu');
+
+        $this->assertSame(200, $response['status']);
+        $this->assertSame(['Lunch'], array_column($response['body']['suggestions'], 'description'));
+    }
+
+    public function test_suggest_transactions_most_used_first(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Car');
+        $this->createTransaction($user['token'], $this->transactionBody(1, ['description' => 'Garage']));
+        $this->createTransaction($user['token'], $this->transactionBody(1, ['description' => 'Gas']));
+        $this->createTransaction($user['token'], $this->transactionBody(1, ['description' => 'Gas']));
+
+        $response = $this->suggestTransactions($user['token'], 'ga');
+
+        $this->assertSame(200, $response['status']);
+        $this->assertSame(['Gas', 'Garage'], array_column($response['body']['suggestions'], 'description'));
+    }
+
+    public function test_suggest_transactions_same_use_count_alphabetical(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Home');
+        $this->createTransaction($user['token'], $this->transactionBody(1, ['description' => 'Garden']));
+        $this->createTransaction($user['token'], $this->transactionBody(1, ['description' => 'Garage']));
+
+        $response = $this->suggestTransactions($user['token'], 'ga');
+
+        $this->assertSame(200, $response['status']);
+        $this->assertSame(['Garage', 'Garden'], array_column($response['body']['suggestions'], 'description'));
+    }
+
+    public function test_suggest_transactions_uses_newest_category_and_place(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Food');
+        $this->createCategory($user['token'], 'Car');
+        $this->createTransaction($user['token'], $this->transactionBody(2, [
+            'description' => 'Gas',
+            'date' => '2026-10-05',
+            'place' => 'OMV',
+        ]));
+        $this->createTransaction($user['token'], $this->transactionBody(1, [
+            'description' => 'Gas',
+            'date' => '2026-10-01',
+            'place' => 'Shell',
+        ]));
+
+        $response = $this->suggestTransactions($user['token'], 'ga');
+
+        $this->assertSame(200, $response['status']);
+        $this->assertSame([
+            'suggestions' => [
+                [
+                    'description' => 'Gas',
+                    'category_id' => 2,
+                    'place' => 'OMV',
+                ],
+            ],
+        ], $response['body']);
+    }
+
+    public function test_suggest_transactions_at_most_eight(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Food');
+
+        for ($i = 1; $i <= 10; $i++) {
+            $this->createTransaction($user['token'], $this->transactionBody(1, ['description' => "Lunch $i"]));
+        }
+
+        $response = $this->suggestTransactions($user['token'], 'lu');
+
+        $this->assertSame(200, $response['status']);
+        $this->assertCount(8, $response['body']['suggestions']);
+    }
+
+    public function test_suggest_transactions_only_own(): void
+    {
+        $firstUser = $this->registerUser('first@example.com');
+        $secondUser = $this->registerUser('second@example.com');
+        $this->createCategory($firstUser['token'], 'Food');
+        $this->createCategory($secondUser['token'], 'Food');
+        $this->createTransaction($firstUser['token'], $this->transactionBody(1, ['description' => 'Lunch at work']));
+        $this->createTransaction($secondUser['token'], $this->transactionBody(2, ['description' => 'Lunch at home']));
+
+        $firstResponse = $this->suggestTransactions($firstUser['token'], 'lu');
+        $secondResponse = $this->suggestTransactions($secondUser['token'], 'lu');
+
+        $this->assertSame(['Lunch at work'], array_column($firstResponse['body']['suggestions'], 'description'));
+        $this->assertSame(['Lunch at home'], array_column($secondResponse['body']['suggestions'], 'description'));
+    }
+
+    public function test_suggest_transactions_empty_for_other_user(): void
+    {
+        $firstUser = $this->registerUser('first@example.com');
+        $secondUser = $this->registerUser('second@example.com');
+        $this->createCategory($firstUser['token'], 'Food');
+        $this->createTransaction($firstUser['token'], $this->transactionBody());
+
+        $response = $this->suggestTransactions($secondUser['token'], 'lu');
+
+        $this->assertSame(200, $response['status']);
+        $this->assertSame(['suggestions' => []], $response['body']);
+    }
+
+    // Wildcards: addcslashes() makes % and _ plain text, so they cannot match every description
+
+    public function test_suggest_transactions_percent_is_plain_text(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Food');
+        $this->createTransaction($user['token'], $this->transactionBody(1, ['description' => 'Lunch']));
+        $this->createTransaction($user['token'], $this->transactionBody(1, ['description' => '100% juice']));
+
+        $response = $this->suggestTransactions($user['token'], '%');
+
+        $this->assertSame(200, $response['status']);
+        $this->assertSame(['suggestions' => []], $response['body']);
+    }
+
+    public function test_suggest_transactions_underscore_is_plain_text(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Food');
+        $this->createTransaction($user['token'], $this->transactionBody());
+
+        $response = $this->suggestTransactions($user['token'], '_unch');
+
+        $this->assertSame(200, $response['status']);
+        $this->assertSame(['suggestions' => []], $response['body']);
+    }
+
+    public function test_suggest_transactions_matches_percent_in_description(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Food');
+        $this->createTransaction($user['token'], $this->transactionBody(1, ['description' => '100% juice']));
+        $this->createTransaction($user['token'], $this->transactionBody(1, ['description' => '1000 grams']));
+
+        $response = $this->suggestTransactions($user['token'], '100%');
+
+        $this->assertSame(200, $response['status']);
+        $this->assertSame(['100% juice'], array_column($response['body']['suggestions'], 'description'));
+    }
+
+    // Query: readText() needs q as text of at most 255 characters, answered with 400
+
+    public function test_suggest_transactions_rejects_missing_query(): void
+    {
+        $user = $this->registerUser();
+
+        $response = $this->get('/transactions/suggestions', ['Authorization: Bearer ' . $user['token']]);
+
+        $this->assertSame(400, $response['status']);
+        $this->assertSame(['error' => 'q is required'], $response['body']);
+    }
+
+    public function test_suggest_transactions_rejects_whitespace_only_query(): void
+    {
+        $user = $this->registerUser();
+
+        $response = $this->suggestTransactions($user['token'], '   ');
+
+        $this->assertSame(400, $response['status']);
+        $this->assertSame(['error' => 'q is required'], $response['body']);
+    }
+
+    public function test_suggest_transactions_rejects_query_too_long(): void
+    {
+        $user = $this->registerUser();
+
+        $response = $this->suggestTransactions($user['token'], str_repeat('a', 256));
+
+        $this->assertSame(400, $response['status']);
+        $this->assertSame(['error' => 'q must be at most 255 characters'], $response['body']);
+    }
+
+    public function test_suggest_transactions_rejects_query_as_list(): void
+    {
+        $user = $this->registerUser();
+
+        $response = $this->get('/transactions/suggestions?q[]=lu', ['Authorization: Bearer ' . $user['token']]);
+
+        $this->assertSame(400, $response['status']);
+        $this->assertSame(['error' => 'q must be text'], $response['body']);
+    }
+
+    // Token check: requireUserId() in index.php answers 401 before suggestions() runs
+
+    public function test_suggest_transactions_rejects_missing_header(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Food');
+        $this->createTransaction($user['token'], $this->transactionBody());
+
+        $response = $this->get('/transactions/suggestions?q=lu');
+
+        $this->assertSame(401, $response['status']);
+        $this->assertSame(['error' => 'not logged in'], $response['body']);
+    }
+
+    public function test_suggest_transactions_rejects_unknown_token(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Food');
+        $this->createTransaction($user['token'], $this->transactionBody());
+        $unknownToken = bin2hex(random_bytes(32));
+
+        $response = $this->suggestTransactions($unknownToken, 'lu');
+
+        $this->assertSame(401, $response['status']);
+        $this->assertSame(['error' => 'not logged in'], $response['body']);
+    }
+
     // Helpers: create the user and categories through the real endpoints, send the token as a Bearer header
 
     private function registerUser(string $email = 'test@example.com'): array
@@ -1078,6 +1371,11 @@ class TransactionsTest extends ApiTestCase
     private function deleteTransaction(string $token, int $id): array
     {
         return $this->delete('/transactions/' . $id, ['Authorization: Bearer ' . $token]);
+    }
+
+    private function suggestTransactions(string $token, string $query): array
+    {
+        return $this->get('/transactions/suggestions?q=' . urlencode($query), ['Authorization: Bearer ' . $token]);
     }
 
     private function storedTransaction(int $id): array|false
