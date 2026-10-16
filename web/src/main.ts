@@ -9,8 +9,6 @@ import router from './router'
 import { setUnauthorizedHandler } from './api/client'
 import { useAuthStore } from './stores/auth'
 
-
-
 const app = createApp(App)
 
 app.use(createPinia())

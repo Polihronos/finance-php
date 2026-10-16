@@ -35,7 +35,8 @@ Web app:
 | Protected screens | Done |
 | Transactions | Started: the screen and its header exist, the list does not yet |
 | Add and edit transaction | Planned |
-| Categories | Planned |
+| Categories | Done, logic tested: add, rename, delete, sum and number of transactions per category |
+| Monthly or yearly toggle | Done, logic tested |
 
 ## Database design
 
@@ -104,12 +105,18 @@ src/api/client.ts                 request(): every API call goes through it. Add
                                   and reads JSON, and turns an error answer into an ApiError.
 src/api/types.ts                  The shapes of the API's answers.
 src/api/auth.ts                   register(), login() and logout(): one function per endpoint.
+src/api/categories.ts             The category endpoints and the stats endpoint, one function each.
 src/stores/auth.ts                The token: kept in memory, in localStorage and in client.ts.
-src/views/                        One file per screen: LoginView, RegisterView, TransactionsView.
+src/stores/categories.ts          The categories and their stats. Loads both again after every change.
+src/stores/period.ts              Monthly or yearly, saved in localStorage.
+src/views/                        One file per screen: LoginView, RegisterView, TransactionsView,
+                                  CategoriesView.
 src/components/AppLayout.vue      Header with the Log out button, around every protected screen.
 src/components/AppButton.vue      The only button: always an icon, with text or icon only.
 src/components/AppError.vue       The error note shown in forms.
 src/components/PasswordInput.vue  Password field with a button to show or hide the password.
+src/components/PeriodToggle.vue   Moon and sun switch between monthly and yearly, shown in the
+                                  header on routes with meta: { periodToggle: true }.
 src/assets/main.css               Colors, font, page layout, form fields and links.
 src/**/__tests__/                 Vitest tests.
 vite.config.ts                    Dev server, and the /api forwarding to the PHP API.
@@ -598,6 +605,19 @@ Each layer only calls the one below it. `client.ts` knows nothing about the stor
 The API stays the only judge of what is valid. The browser only checks what is cheap to check
 early: required fields, the email format and the password length.
 
+### Categories in the browser
+
+| Moment | What happens |
+|---|---|
+| Opening Categories | The categories and their stats are loaded together. Each card shows the name, the average spent in EUR on the left and the number of transactions on the right |
+| Moon and sun toggle in the header | Switches every card between the monthly average and the yearly one, which is the monthly average × 12. The choice is saved in `localStorage` |
+| Clicking a card | Opens it and shows the rename and delete buttons. Only one card is open at a time, clicking it again closes it |
+| Rename | The name turns into a field. Enter or ✓ saves, Esc or X cancels |
+| Delete | The card asks "Delete Food?" first. A category that still has transactions is not deleted and the API's error is shown |
+
+Amounts are shown as whole euros. After every add, rename or delete the list and the stats are
+loaded again, so the order and the numbers always match the database.
+
 ### Design
 
 | | |
@@ -660,6 +680,9 @@ needs.
 | `src/api/__tests__/client.spec.ts` | The path, JSON body and token header of every request, success and error answers, answers that are not JSON, and which `401` answers call the handler set with `setUnauthorizedHandler()` |
 | `src/api/__tests__/auth.spec.ts` | Register, login and logout: what each sends, what it returns, and that API errors reach the caller |
 | `src/stores/__tests__/auth.spec.ts` | The token after start, login, register, logout and forget, in the store, in `localStorage` and in the requests that follow, also when the API fails |
+| `src/api/__tests__/categories.spec.ts` | List, create, rename, delete and stats: what each sends, what it returns, and that API errors reach the caller |
+| `src/stores/__tests__/categories.spec.ts` | Loading categories and stats together, loading again only after a successful change, and `statsFor()` |
+| `src/stores/__tests__/period.spec.ts` | The saved choice at start, a broken saved value, and saving on every toggle |
 | `src/api/__tests__/fakeFetch.ts` | Shared helper: replaces `fetch` with a fake that answers with a given status and body |
 
 Other checks, from the same folder:

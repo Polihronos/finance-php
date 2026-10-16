@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth'
 declare module 'vue-router' {
   interface RouteMeta {
     guest?: boolean
+    periodToggle?: boolean
   }
 }
 
@@ -31,6 +32,12 @@ const router = createRouter({
           path: '',
           name: 'transactions',
           component: () => import('@/views/TransactionsView.vue'),
+        },
+        {
+          path: 'categories',
+          name: 'categories',
+          component: () => import('@/views/CategoriesView.vue'),
+          meta: { periodToggle: true },
         },
       ],
     },
