@@ -147,4 +147,30 @@ class Categories
 
         return $data['name'];
     }
+
+    public function stats(int $userId): void
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT
+                c.id AS category_id,
+                COUNT(t.id) AS transaction_count,
+                COALESCE(ROUND(SUM(t.amount) / GREATEST(PERIOD_DIFF(
+                    DATE_FORMAT(CURDATE(), '%Y%m'),
+                    DATE_FORMAT(MIN(t.date), '%Y%m')
+                ) + 1, 1), 2), 0) AS monthly_average
+            FROM categories c
+            LEFT JOIN transactions t ON t.category_id = c.id
+            WHERE c.user_id = :user_id
+            GROUP BY c.id"
+        );
+
+        $stmt->execute([
+            'user_id' => $userId,
+        ]);
+
+        $rows = $stmt->fetchAll();
+
+        http_response_code(200);
+        echo json_encode(['stats' => $rows]);
+    }
 }

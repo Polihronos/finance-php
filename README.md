@@ -15,6 +15,7 @@ API:
 | `POST /logout` | Done, tested |
 | `POST /categories` | Done, tested |
 | `GET /categories` | Done, tested |
+| `GET /categories/stats` | Done, tested |
 | `PUT /categories/{id}` | Done, tested |
 | `DELETE /categories/{id}` | Done, tested |
 | `POST /transactions` | Done, tested |
@@ -75,7 +76,8 @@ src/Router.php        Matches method and path to a handler, with one numeric {id
                       Unknown routes answer 404.
 src/Request.php       Reads the JSON request body.
 src/Auth.php          Register, login, logout, and the token check for protected endpoints.
-src/Categories.php    Create, list, rename and delete the logged-in user's categories.
+src/Categories.php    Create, list, rename and delete the logged-in user's categories, and their
+                      spending stats.
 src/Transactions.php  Create, list, edit and delete the logged-in user's transactions.
 src/HttpException.php An error with an HTTP status. Throwing it sends that status and message.
 src/Database.php      Opens the database connection from the .env settings.
@@ -398,6 +400,23 @@ No request body. `200 OK`, sorted by name:
 
 A user without categories gets `{"categories": []}`.
 
+### `GET /categories/stats`
+
+No request body. `200 OK`, one row for every category of the user, including categories without
+transactions. The order of the rows is not fixed; match them to categories by `category_id`.
+
+```json
+{"stats": [{"category_id": 1, "transaction_count": 2, "monthly_average": "30.00"}]}
+```
+
+`monthly_average` is the total of the category's transactions divided by the number of months from
+the month of its first transaction up to the current month, both included. Months without
+transactions count too: 30 in August and 60 in October give 90 / 3 = `30.00`. It is rounded to
+cents and sent as text, like amounts. A category without transactions gets `0` and `"0.00"`. When
+all transactions of a category are dated in the future, it counts as one month.
+
+A user without categories gets `{"stats": []}`.
+
 ### `PUT /categories/{id}`
 
 Renames a category.
@@ -619,7 +638,7 @@ from the same state.
 | `tests/RegisterTest.php` | Successful registration, body and field checks, email format, password length, duplicate emails |
 | `tests/LoginTest.php` | Successful login, body and field checks, wrong and unknown credentials, email capitals |
 | `tests/LogoutTest.php` | Logout of one session, and the token check: missing, malformed, unknown, reused and expired tokens |
-| `tests/CategoriesTest.php` | Create, list, rename and delete: name checks, duplicates, sorting, other users' categories, categories used by transactions, token check |
+| `tests/CategoriesTest.php` | Create, list, rename and delete: name checks, duplicates, sorting, other users' categories, categories used by transactions, token check. Stats: monthly average, empty months, rounding, future dates, other users' data |
 | `tests/TransactionsTest.php` | Create, list, edit and delete: checks for every field, defaults and cleanup of values, sorting, other users' transactions and categories, token check |
 | `tests/ApiTestCase.php` | Shared setup: test server, database reset, `post()`, `put()`, `get()` and `delete()` (plus `postRaw()` and `putRaw()` for bodies that are not JSON) with optional extra headers, `countUsers()`, `countSessions()` |
 

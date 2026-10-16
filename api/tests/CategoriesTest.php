@@ -703,6 +703,156 @@ class CategoriesTest extends ApiTestCase
         $this->assertSame(1, $this->countCategories());
     }
 
+    // Successful stats: GET /categories/stats returns one row per own category, average over every month since the first transaction
+
+    public function test_category_stats_empty(): void
+    {
+        $user = $this->registerUser();
+
+        $response = $this->categoryStats($user['token']);
+
+        $this->assertSame(200, $response['status']);
+        $this->assertSame(['stats' => []], $response['body']);
+    }
+
+    public function test_category_stats_category_without_transactions(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Food');
+
+        $response = $this->categoryStats($user['token']);
+
+        $this->assertSame(200, $response['status']);
+        $this->assertSame([
+            'stats' => [
+                ['category_id' => 1, 'transaction_count' => 0, 'monthly_average' => '0.00'],
+            ],
+        ], $response['body']);
+    }
+
+    public function test_category_stats_one_month(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Food');
+        $this->insertTransactionMonthsAgo($user['user_id'], 1, '12.50', 0);
+        $this->insertTransactionMonthsAgo($user['user_id'], 1, '7.50', 0);
+
+        $response = $this->categoryStats($user['token']);
+
+        $this->assertSame(200, $response['status']);
+        $this->assertSame([
+            'stats' => [
+                ['category_id' => 1, 'transaction_count' => 2, 'monthly_average' => '20.00'],
+            ],
+        ], $response['body']);
+    }
+
+    public function test_category_stats_counts_months_without_transactions(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Food');
+        $this->insertTransactionMonthsAgo($user['user_id'], 1, '30.00', 2);
+        $this->insertTransactionMonthsAgo($user['user_id'], 1, '60.00', 0);
+
+        $response = $this->categoryStats($user['token']);
+
+        $this->assertSame(200, $response['status']);
+        $this->assertSame([
+            'stats' => [
+                ['category_id' => 1, 'transaction_count' => 2, 'monthly_average' => '30.00'],
+            ],
+        ], $response['body']);
+    }
+
+    public function test_category_stats_rounds_to_cents(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Food');
+        $this->insertTransactionMonthsAgo($user['user_id'], 1, '10.00', 2);
+
+        $response = $this->categoryStats($user['token']);
+
+        $this->assertSame(200, $response['status']);
+        $this->assertSame('3.33', $response['body']['stats'][0]['monthly_average']);
+    }
+
+    public function test_category_stats_future_transaction_counts_as_one_month(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Food');
+        $this->insertTransactionMonthsAgo($user['user_id'], 1, '30.00', -1);
+
+        $response = $this->categoryStats($user['token']);
+
+        $this->assertSame(200, $response['status']);
+        $this->assertSame([
+            'stats' => [
+                ['category_id' => 1, 'transaction_count' => 1, 'monthly_average' => '30.00'],
+            ],
+        ], $response['body']);
+    }
+
+    public function test_category_stats_per_category(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Food');
+        $this->createCategory($user['token'], 'Bills');
+        $this->insertTransactionMonthsAgo($user['user_id'], 1, '12.50', 0);
+        $this->insertTransactionMonthsAgo($user['user_id'], 2, '100.00', 1);
+
+        $response = $this->categoryStats($user['token']);
+
+        $this->assertSame(200, $response['status']);
+        $stats = array_column($response['body']['stats'], null, 'category_id');
+        $this->assertCount(2, $stats);
+        $this->assertSame(['category_id' => 1, 'transaction_count' => 1, 'monthly_average' => '12.50'], $stats[1]);
+        $this->assertSame(['category_id' => 2, 'transaction_count' => 1, 'monthly_average' => '50.00'], $stats[2]);
+    }
+
+    public function test_category_stats_only_own(): void
+    {
+        $firstUser = $this->registerUser('first@example.com');
+        $secondUser = $this->registerUser('second@example.com');
+        $this->createCategory($firstUser['token'], 'Food');
+        $this->createCategory($secondUser['token'], 'Rent');
+        $this->insertTransactionMonthsAgo($firstUser['user_id'], 1, '12.50', 0);
+        $this->insertTransactionMonthsAgo($secondUser['user_id'], 2, '500.00', 0);
+
+        $response = $this->categoryStats($firstUser['token']);
+
+        $this->assertSame(200, $response['status']);
+        $this->assertSame([
+            'stats' => [
+                ['category_id' => 1, 'transaction_count' => 1, 'monthly_average' => '12.50'],
+            ],
+        ], $response['body']);
+    }
+
+    // Token check: requireUserId() in index.php answers 401 before stats() runs
+
+    public function test_category_stats_rejects_missing_header(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Food');
+
+        $response = $this->get('/categories/stats');
+
+        $this->assertSame(401, $response['status']);
+        $this->assertSame(['error' => 'not logged in'], $response['body']);
+    }
+
+    public function test_category_stats_rejects_unknown_token(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Food');
+        $unknownToken = bin2hex(random_bytes(32));
+
+        $response = $this->categoryStats($unknownToken);
+
+        $this->assertSame(401, $response['status']);
+        $this->assertSame(['error' => 'not logged in'], $response['body']);
+    }
+
     // Helpers: create the user through the real register endpoint, send the token as a Bearer header
 
     private function registerUser(string $email = 'test@example.com'): array
@@ -738,6 +888,11 @@ class CategoriesTest extends ApiTestCase
         return $this->delete('/categories/' . $id, ['Authorization: Bearer ' . $token]);
     }
 
+    private function categoryStats(string $token): array
+    {
+        return $this->get('/categories/stats', ['Authorization: Bearer ' . $token]);
+    }
+
     private function insertTransaction(int $userId, int $categoryId): void
     {
         $stmt = self::$pdo->prepare(
@@ -748,6 +903,22 @@ class CategoriesTest extends ApiTestCase
             'user_id' => $userId,
             'category_id' => $categoryId,
             'currency' => 'EUR',
+            'payment_method' => 'card',
+        ]);
+    }
+
+    private function insertTransactionMonthsAgo(int $userId, int $categoryId, string $amount, int $monthsAgo): void
+    {
+        $stmt = self::$pdo->prepare(
+            'INSERT INTO transactions (user_id, category_id, amount, currency, date, payment_method)
+            VALUES (:user_id, :category_id, :amount, :currency, DATE_SUB(CURDATE(), INTERVAL :months_ago MONTH), :payment_method)'
+        );
+        $stmt->execute([
+            'user_id' => $userId,
+            'category_id' => $categoryId,
+            'amount' => $amount,
+            'currency' => 'EUR',
+            'months_ago' => $monthsAgo,
             'payment_method' => 'card',
         ]);
     }

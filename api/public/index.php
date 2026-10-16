@@ -58,6 +58,11 @@ $router->delete('/categories/{id}', function (int $id) use ($auth, $categories) 
     $categories->delete($userId, $id);
 });
 
+$router->get('/categories/stats', function () use ($auth, $categories) {
+    $userId = $auth->requireUserId();
+    $categories->stats($userId);
+});
+
 $router->post('/transactions', function () use ($auth, $transactions) {
     $userId = $auth->requireUserId();
     $transactions->create($userId);
