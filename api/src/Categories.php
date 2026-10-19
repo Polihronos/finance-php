@@ -2,6 +2,7 @@
 
 namespace App;
 
+use DateTimeImmutable;
 use PDO;
 use PDOException;
 
@@ -148,24 +149,58 @@ class Categories
         return $data['name'];
     }
 
+    private function readPeriod(): array
+    {
+        $month = $_GET['month'] ?? null;
+        $year = $_GET['year'] ?? null;
+
+        if ($month !== null && $year !== null) {
+            throw new HttpException(400, 'send month or year, not both');
+        }
+
+        if ($month !== null) {
+            if (!is_string($month) || !preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $month)) {
+                throw new HttpException(400, 'month must be in YYYY-MM format');
+            }
+
+            $start = new DateTimeImmutable("$month-01");
+
+            return [$start->format('Y-m-d'), $start->modify('+1 month')->format('Y-m-d')];
+        }
+
+        if ($year !== null) {
+            if (!is_string($year) || !preg_match('/^\d{4}$/', $year)) {
+                throw new HttpException(400, 'year must be in YYYY format');
+            }
+
+            $start = new DateTimeImmutable("$year-01-01");
+
+            return [$start->format('Y-m-d'), $start->modify('+1 year')->format('Y-m-d')];
+        }
+
+        throw new HttpException(400, 'month or year is required');
+    }
+
     public function stats(int $userId): void
     {
+        [$start, $end] = $this->readPeriod();
+
         $stmt = $this->pdo->prepare(
-            "SELECT
+            'SELECT
                 c.id AS category_id,
                 COUNT(t.id) AS transaction_count,
-                COALESCE(ROUND(SUM(t.amount) / GREATEST(PERIOD_DIFF(
-                    DATE_FORMAT(CURDATE(), '%Y%m'),
-                    DATE_FORMAT(MIN(t.date), '%Y%m')
-                ) + 1, 1), 2), 0) AS monthly_average
+                COALESCE(SUM(t.amount), 0) AS total
             FROM categories c
-            LEFT JOIN transactions t ON t.category_id = c.id
+            LEFT JOIN transactions t
+                ON t.category_id = c.id AND t.date >= :start AND t.date < :end
             WHERE c.user_id = :user_id
-            GROUP BY c.id"
+            GROUP BY c.id'
         );
 
         $stmt->execute([
             'user_id' => $userId,
+            'start' => $start,
+            'end' => $end,
         ]);
 
         $rows = $stmt->fetchAll();

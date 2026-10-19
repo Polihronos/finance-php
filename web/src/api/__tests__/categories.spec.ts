@@ -128,30 +128,38 @@ test('deleteCategory passes on the api error', async () => {
   })
 })
 
-// Stats: gets the count and monthly average of every category
+// Stats: gets the count and total of every category for one month or one year
 
-test('listCategoryStats gets the stats', async () => {
+test('listCategoryStats gets the stats of a month', async () => {
   const fetchMock = fakeFetch(
     200,
-    '{"stats":[{"category_id":1,"transaction_count":12,"monthly_average":"30.00"}]}',
+    '{"stats":[{"category_id":1,"transaction_count":2,"total":"30.49"}]}',
   )
 
-  const answer = await listCategoryStats()
+  const answer = await listCategoryStats({ month: '2026-10' })
 
-  expect(fetchMock).toHaveBeenCalledWith('/api/categories/stats', {
+  expect(fetchMock).toHaveBeenCalledWith('/api/categories/stats?month=2026-10', {
     method: 'GET',
     headers: { Authorization: `Bearer ${token}` },
     body: undefined,
   })
   expect(answer).toStrictEqual({
-    stats: [{ category_id: 1, transaction_count: 12, monthly_average: '30.00' }],
+    stats: [{ category_id: 1, transaction_count: 2, total: '30.49' }],
   })
+})
+
+test('listCategoryStats asks for a year', async () => {
+  const fetchMock = fakeFetch(200, '{"stats":[]}')
+
+  await listCategoryStats({ year: '2026' })
+
+  expect(fetchMock).toHaveBeenCalledWith('/api/categories/stats?year=2026', expect.anything())
 })
 
 test('listCategoryStats passes on the api error', async () => {
   fakeFetch(401, '{"error":"not logged in"}')
 
-  const promise = listCategoryStats()
+  const promise = listCategoryStats({ month: '2026-10' })
 
   await expect(promise).rejects.toBeInstanceOf(ApiError)
   await expect(promise).rejects.toMatchObject({ status: 401, message: 'not logged in' })

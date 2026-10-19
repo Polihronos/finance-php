@@ -414,18 +414,30 @@ A user without categories gets `{"categories": []}`.
 
 ### `GET /categories/stats`
 
-No request body. `200 OK`, one row for every category of the user, including categories without
-transactions. The order of the rows is not fixed; match them to categories by `category_id`.
+What was spent in each category in one month or one year. Send either `month` or `year`:
 
-```json
-{"stats": [{"category_id": 1, "transaction_count": 2, "monthly_average": "30.00"}]}
+```
+GET /categories/stats?month=2026-10
+GET /categories/stats?year=2026
 ```
 
-`monthly_average` is the total of the category's transactions divided by the number of months from
-the month of its first transaction up to the current month, both included. Months without
-transactions count too: 30 in August and 60 in October give 90 / 3 = `30.00`. It is rounded to
-cents and sent as text, like amounts. A category without transactions gets `0` and `"0.00"`. When
-all transactions of a category are dated in the future, it counts as one month.
+`200 OK`, one row for every category of the user, including categories without transactions in
+that period. The order of the rows is not fixed; match them to categories by `category_id`.
+
+```json
+{"stats": [{"category_id": 1, "transaction_count": 2, "total": "30.49"}]}
+```
+
+`total` is the sum of the category's transactions dated in that month or year, sent as text with 2
+decimals like amounts. `transaction_count` counts the same transactions. A category without
+transactions in the period gets `0` and `"0.00"`.
+
+| Status | Error | When |
+|---|---|---|
+| `400` | `month or year is required` | Neither is sent |
+| `400` | `send month or year, not both` | Both are sent |
+| `400` | `month must be in YYYY-MM format` | For example `2026-1`, `2026-13` or a list |
+| `400` | `year must be in YYYY format` | For example `26` |
 
 A user without categories gets `{"stats": []}`.
 
@@ -691,7 +703,7 @@ from the same state.
 | `tests/RegisterTest.php` | Successful registration, body and field checks, email format, password length, duplicate emails |
 | `tests/LoginTest.php` | Successful login, body and field checks, wrong and unknown credentials, email capitals |
 | `tests/LogoutTest.php` | Logout of one session, and the token check: missing, malformed, unknown, reused and expired tokens |
-| `tests/CategoriesTest.php` | Create, list, rename and delete: name checks, duplicates, sorting, other users' categories, categories used by transactions, token check. Stats: monthly average, empty months, rounding, future dates, other users' data |
+| `tests/CategoriesTest.php` | Create, list, rename and delete: name checks, duplicates, sorting, other users' categories, categories used by transactions, token check. Stats: totals for a month or a year, first and last day of a month, December into January, other users' data, period checks |
 | `tests/TransactionsTest.php` | Create, list, edit and delete: checks for every field, defaults and cleanup of values, sorting, other users' transactions and categories, token check. Suggestions: matching the start, capitals, one per description, order, newest category and place, at most 8, `%` and `_` as plain text, query checks |
 | `tests/ApiTestCase.php` | Shared setup: test server, database reset, `post()`, `put()`, `get()` and `delete()` (plus `postRaw()` and `putRaw()` for bodies that are not JSON) with optional extra headers, `countUsers()`, `countSessions()` |
 

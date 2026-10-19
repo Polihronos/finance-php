@@ -30,6 +30,10 @@ const router = createRouter({
       children: [
         {
           path: '',
+          redirect: { name: 'transactions' },
+        },
+        {
+          path: 'transactions',
           name: 'transactions',
           component: () => import('@/views/TransactionsView.vue'),
         },

@@ -3,11 +3,12 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 import { ApiError } from '@/api/client'
 import { useCategoriesStore } from '../categories'
+import { usePeriodStore } from '../period'
 
 const categoriesBody = '{"categories":[{"id":2,"name":"Bills"},{"id":1,"name":"Food"}]}'
 const statsBody =
-  '{"stats":[{"category_id":1,"transaction_count":12,"monthly_average":"30.00"},' +
-  '{"category_id":2,"transaction_count":0,"monthly_average":"0.00"}]}'
+  '{"stats":[{"category_id":1,"transaction_count":2,"total":"30.49"},' +
+  '{"category_id":2,"transaction_count":0,"total":"0.00"}]}'
 
 // Answers each "METHOD /path" with its own status and body, so load() can ask for categories and stats at once
 function fakeApi(answers: Record<string, [number, string]>) {
@@ -25,11 +26,13 @@ function calledPaths(fetchMock: ReturnType<typeof fakeApi>): string[] {
 
 const loadAnswers: Record<string, [number, string]> = {
   'GET /api/categories': [200, categoriesBody],
-  'GET /api/categories/stats': [200, statsBody],
+  'GET /api/categories/stats?month=2026-10': [200, statsBody],
 }
 
 beforeEach(() => {
+  localStorage.clear()
   setActivePinia(createPinia())
+  usePeriodStore().month = '2026-10'
 })
 
 afterEach(() => {
@@ -49,15 +52,32 @@ test('load fills categories and stats', async () => {
     { id: 1, name: 'Food' },
   ])
   expect(categories.stats).toStrictEqual([
-    { category_id: 1, transaction_count: 12, monthly_average: '30.00' },
-    { category_id: 2, transaction_count: 0, monthly_average: '0.00' },
+    { category_id: 1, transaction_count: 2, total: '30.49' },
+    { category_id: 2, transaction_count: 0, total: '0.00' },
   ])
+})
+
+test('load asks for the year of the chosen month when yearly is on', async () => {
+  const fetchMock = fakeApi({
+    'GET /api/categories': [200, categoriesBody],
+    'GET /api/categories/stats?year=2026': [200, statsBody],
+  })
+  usePeriodStore().toggle()
+  const categories = useCategoriesStore()
+
+  await categories.load()
+
+  expect(calledPaths(fetchMock)).toStrictEqual([
+    'GET /api/categories',
+    'GET /api/categories/stats?year=2026',
+  ])
+  expect(categories.stats).toHaveLength(2)
 })
 
 test('failed stats keep both lists unchanged', async () => {
   fakeApi({
     'GET /api/categories': [200, categoriesBody],
-    'GET /api/categories/stats': [500, 'Internal Server Error'],
+    'GET /api/categories/stats?month=2026-10': [500, 'Internal Server Error'],
   })
   const categories = useCategoriesStore()
 
@@ -66,6 +86,19 @@ test('failed stats keep both lists unchanged', async () => {
   await expect(promise).rejects.toMatchObject({ status: 500, message: 'request failed (500)' })
   expect(categories.categories).toStrictEqual([])
   expect(categories.stats).toStrictEqual([])
+})
+
+// Load stats: asks only for the stats of the chosen period, the categories stay
+
+test('loadStats asks only for the stats', async () => {
+  const fetchMock = fakeApi(loadAnswers)
+  const categories = useCategoriesStore()
+
+  await categories.loadStats()
+
+  expect(calledPaths(fetchMock)).toStrictEqual(['GET /api/categories/stats?month=2026-10'])
+  expect(categories.stats).toHaveLength(2)
+  expect(categories.categories).toStrictEqual([])
 })
 
 // Create, rename and remove: a success loads the lists again, a failure loads nothing
@@ -82,7 +115,7 @@ test('create posts then loads again', async () => {
   expect(calledPaths(fetchMock)).toStrictEqual([
     'POST /api/categories',
     'GET /api/categories',
-    'GET /api/categories/stats',
+    'GET /api/categories/stats?month=2026-10',
   ])
   expect(categories.categories).toHaveLength(2)
 })
@@ -113,7 +146,7 @@ test('rename puts then loads again', async () => {
   expect(calledPaths(fetchMock)).toStrictEqual([
     'PUT /api/categories/1',
     'GET /api/categories',
-    'GET /api/categories/stats',
+    'GET /api/categories/stats?month=2026-10',
   ])
 })
 
@@ -129,7 +162,7 @@ test('remove deletes then loads again', async () => {
   expect(calledPaths(fetchMock)).toStrictEqual([
     'DELETE /api/categories/2',
     'GET /api/categories',
-    'GET /api/categories/stats',
+    'GET /api/categories/stats?month=2026-10',
   ])
 })
 
@@ -158,8 +191,8 @@ test('statsFor finds the row of a category', async () => {
 
   expect(categories.statsFor(1)).toStrictEqual({
     category_id: 1,
-    transaction_count: 12,
-    monthly_average: '30.00',
+    transaction_count: 2,
+    total: '30.49',
   })
 })
 

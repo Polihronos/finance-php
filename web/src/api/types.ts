@@ -26,9 +26,52 @@ export type CategoryResponse = {
 export type CategoryStats = {
   category_id: number
   transaction_count: number
-  monthly_average: string
+  total: string
 }
+
+export type StatsPeriod = { month: string } | { year: string }
 
 export type CategoryStatsResponse = {
   stats: CategoryStats[]
+}
+
+export type PaymentMethod = 'cash' | 'card'
+
+export type Transaction = {
+  id: number
+  category_id: number
+  amount: string
+  currency: string
+  date: string
+  payment_method: PaymentMethod
+  description: string | null
+  place: string | null
+}
+
+export type TransactionInput = {
+  category_id: number
+  amount: number
+  date: string
+  payment_method: PaymentMethod
+  description: string | null
+  place: string | null
+}
+
+export type TransactionsResponse = {
+  transactions: Transaction[]
+}
+
+export type TransactionResponse = {
+  success: boolean
+  transaction: Transaction
+}
+
+export type Suggestion = {
+  description: string
+  category_id: number
+  place: string | null
+}
+
+export type SuggestionsResponse = {
+  suggestions: Suggestion[]
 }

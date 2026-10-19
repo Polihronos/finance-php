@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { Check, Plus, SquarePen, Trash, X } from '@lucide/vue'
 
 import { ApiError } from '@/api/client'
@@ -8,6 +8,7 @@ import AppError from '@/components/AppError.vue'
 import type { Category } from '@/api/types'
 import { useCategoriesStore } from '@/stores/categories'
 import { usePeriodStore } from '@/stores/period'
+import { formatEur } from '@/utils/money'
 
 const categoriesStore = useCategoriesStore()
 const periodStore = usePeriodStore()
@@ -26,16 +27,19 @@ function showError(e: unknown): void {
 
 function statsLine(categoryId: number): string {
   const stats = categoriesStore.statsFor(categoryId)
-  if (stats === undefined) {
-    return ''
-  }
-
-  const monthly = Number(stats.monthly_average)
-  const isMonth = periodStore.period === 'month'
-  const amount = Math.round(isMonth ? monthly : monthly * 12)
-
-  return `${amount} EUR`
+  return stats === undefined ? '' : formatEur(stats.total)
 }
+
+watch(
+  () => periodStore.statsPeriod,
+  async () => {
+    try {
+      await categoriesStore.loadStats()
+    } catch (e) {
+      showError(e)
+    }
+  },
+)
 
 function toggleOpen(categoryId: number): void {
   editingId.value = null
@@ -122,10 +126,11 @@ async function add(): Promise<void> {
       <AppButton :icon="Plus" label="Add" type="submit" :disabled="loading" />
     </form>
     <AppError v-if="error">{{ error }}</AppError>
-    <ul>
+    <ul class="list">
       <li
         v-for="category in categoriesStore.categories"
         :key="category.id"
+        class="list-item"
         tabindex="0"
         @click="toggleOpen(category.id)"
         @keydown.enter.self="toggleOpen(category.id)"
@@ -142,12 +147,12 @@ async function add(): Promise<void> {
             @keydown.esc="cancelRename"
           />
           <span v-else class="name">{{ category.name }}</span>
-          <span class="stats">{{ statsLine(category.id) }}</span>
+          <span class="muted">{{ statsLine(category.id) }}</span>
         </div>
-        <span class="stats">{{
+        <span class="muted">{{
           categoriesStore.statsFor(category.id)?.transaction_count ?? 0
         }}</span>
-        <div v-if="openId === category.id" class="actions" @click.stop>
+        <div v-if="openId === category.id" class="list-actions" @click.stop>
           <template v-if="editingId === category.id">
             <AppButton :icon="X" label="Cancel" icon-only variant="quiet" @click="cancelRename" />
             <AppButton
@@ -198,12 +203,8 @@ form {
   margin-bottom: 1rem;
 }
 
-ul {
-  display: grid;
-  gap: 0.5rem;
-  margin: 1.5rem 0 0;
-  padding: 0;
-  list-style: none;
+.list {
+  margin-top: 1.5rem;
 }
 
 li {
@@ -215,10 +216,6 @@ li {
   row-gap: 0.125rem;
   min-height: 3.75rem;
   padding: 0.5rem 0.5rem 0.5rem 1rem;
-  border: 1px solid color-mix(in srgb, var(--text), transparent 70%);
-  border-radius: 0.5rem;
-  background: white;
-  cursor: pointer;
 }
 
 span {
@@ -236,21 +233,8 @@ span {
   text-align: center;
 }
 
-.stats {
-  font-size: 0.85rem;
-  color: color-mix(in srgb, var(--text), transparent 35%);
-}
-
-li:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
-.actions {
-  display: flex;
+.list-actions {
   flex-basis: calc(100% + 1.25rem);
-  align-items: center;
-  justify-content: space-between;
   margin: 0 -0.5rem 0 -0.75rem;
 }
 </style>

@@ -3,6 +3,7 @@ import type {
   CategoriesResponse,
   CategoryResponse,
   CategoryStatsResponse,
+  StatsPeriod,
   SuccessResponse,
 } from './types'
 
@@ -22,6 +23,6 @@ export function deleteCategory(id: number): Promise<SuccessResponse> {
   return request<SuccessResponse>('DELETE', `/categories/${id}`)
 }
 
-export function listCategoryStats(): Promise<CategoryStatsResponse> {
-  return request<CategoryStatsResponse>('GET', '/categories/stats')
+export function listCategoryStats(period: StatsPeriod): Promise<CategoryStatsResponse> {
+  return request<CategoryStatsResponse>('GET', `/categories/stats?${new URLSearchParams(period)}`)
 }

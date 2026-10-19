@@ -3,18 +3,25 @@ import { defineStore } from 'pinia'
 
 import type { Category, CategoryStats } from '@/api/types'
 import * as categoriesApi from '@/api/categories'
+import { usePeriodStore } from '@/stores/period'
 
 export const useCategoriesStore = defineStore('categories', () => {
   const categories = ref<Category[]>([])
   const stats = ref<CategoryStats[]>([])
+  const periodStore = usePeriodStore()
 
   async function load(): Promise<void> {
     const [categoriesAnswer, statsAnswer] = await Promise.all([
       categoriesApi.listCategories(),
-      categoriesApi.listCategoryStats(),
+      categoriesApi.listCategoryStats(periodStore.statsPeriod),
     ])
     categories.value = categoriesAnswer.categories
     stats.value = statsAnswer.stats
+  }
+
+  async function loadStats(): Promise<void> {
+    const answer = await categoriesApi.listCategoryStats(periodStore.statsPeriod)
+    stats.value = answer.stats
   }
 
   async function create(name: string): Promise<void> {
@@ -36,5 +43,5 @@ export const useCategoriesStore = defineStore('categories', () => {
     return stats.value.find((row) => row.category_id === categoryId)
   }
 
-  return { categories, stats, load, create, rename, remove, statsFor }
+  return { categories, stats, load, loadStats, create, rename, remove, statsFor }
 })

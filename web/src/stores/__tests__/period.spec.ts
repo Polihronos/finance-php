@@ -1,11 +1,15 @@
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, expect, test } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 import { usePeriodStore } from '../period'
 
 beforeEach(() => {
   localStorage.clear()
   setActivePinia(createPinia())
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 // Start: picks up the choice saved by an earlier visit, anything else means month
@@ -51,4 +55,31 @@ test('toggle twice switches back to month and saves it', () => {
 
   expect(period.period).toBe('month')
   expect(localStorage.getItem('period')).toBe('month')
+})
+
+// Month: starts on the current month, statsPeriod asks for that month or for its year
+
+test('month starts on the current month', () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date(2026, 9, 19))
+
+  const period = usePeriodStore()
+
+  expect(period.month).toBe('2026-10')
+})
+
+test('statsPeriod asks for the chosen month', () => {
+  const period = usePeriodStore()
+  period.month = '2026-07'
+
+  expect(period.statsPeriod).toStrictEqual({ month: '2026-07' })
+})
+
+test('statsPeriod asks for the year of the chosen month when yearly is on', () => {
+  const period = usePeriodStore()
+  period.month = '2026-07'
+
+  period.toggle()
+
+  expect(period.statsPeriod).toStrictEqual({ year: '2026' })
 })
