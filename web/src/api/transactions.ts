@@ -1,5 +1,6 @@
 import { request } from './client'
 import type {
+  DateRange,
   SuccessResponse,
   SuggestionsResponse,
   TransactionInput,
@@ -7,8 +8,8 @@ import type {
   TransactionsResponse,
 } from './types'
 
-export function listTransactions(): Promise<TransactionsResponse> {
-  return request<TransactionsResponse>('GET', '/transactions')
+export function listTransactions(range: DateRange): Promise<TransactionsResponse> {
+  return request<TransactionsResponse>('GET', `/transactions?${new URLSearchParams(range)}`)
 }
 
 export function createTransaction(input: TransactionInput): Promise<TransactionResponse> {

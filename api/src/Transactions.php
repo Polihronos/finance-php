@@ -66,20 +66,36 @@ class Transactions
         return $text;
     }
 
-    private function readDate(array $data): string
+    private function readDate(array $data, string $field = 'date'): string
     {
-        $date = $this->readText($data, 'date', 10)
-            ?? throw new HttpException(400, 'date is required');
+        $date = $this->readText($data, $field, 10)
+            ?? throw new HttpException(400, "$field is required");
 
         if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $date, $parts)) {
-            throw new HttpException(400, 'date must be in YYYY-MM-DD format');
+            throw new HttpException(400, "$field must be in YYYY-MM-DD format");
         }
 
         if (!checkdate((int) $parts[2], (int) $parts[3], (int) $parts[1])) {
-            throw new HttpException(400, 'date is not a real date');
+            throw new HttpException(400, "$field is not a real date");
         }
 
         return $date;
+    }
+
+    private function readRange(): ?array
+    {
+        if (!isset($_GET['from']) && !isset($_GET['to'])) {
+            return null;
+        }
+
+        $from = $this->readDate($_GET, 'from');
+        $to = $this->readDate($_GET, 'to');
+
+        if ($from >= $to) {
+            throw new HttpException(400, 'from must be before to');
+        }
+
+        return [$from, $to];
     }
 
     private function readCategoryId(array $data, int $userId): int
@@ -182,15 +198,45 @@ class Transactions
 
     public function list(int $userId): void
     {
+        $range = $this->readRange();
+
+        if ($range === null) {
+            $stmt = $this->pdo->prepare(
+                'SELECT ' . self::COLUMNS . ' FROM transactions WHERE user_id = :user_id ORDER BY date DESC, id DESC'
+            );
+            $stmt->execute([
+                'user_id' => $userId,
+            ]);
+
+            http_response_code(200);
+            echo json_encode(['transactions' => $stmt->fetchAll(), 'has_older' => false]);
+            return;
+        }
+
+        [$from, $to] = $range;
+
         $stmt = $this->pdo->prepare(
-            'SELECT ' . self::COLUMNS . ' FROM transactions WHERE user_id = :user_id ORDER BY date DESC, id DESC'
+            'SELECT ' . self::COLUMNS . ' FROM transactions
+            WHERE user_id = :user_id AND date >= :from AND date < :to
+            ORDER BY date DESC, id DESC'
         );
         $stmt->execute([
             'user_id' => $userId,
+            'from' => $from,
+            'to' => $to,
+        ]);
+        $transactions = $stmt->fetchAll();
+
+        $stmt = $this->pdo->prepare(
+            'SELECT EXISTS (SELECT 1 FROM transactions WHERE user_id = :user_id AND date < :from)'
+        );
+        $stmt->execute([
+            'user_id' => $userId,
+            'from' => $from,
         ]);
 
         http_response_code(200);
-        echo json_encode(['transactions' => $stmt->fetchAll()]);
+        echo json_encode(['transactions' => $transactions, 'has_older' => (bool) $stmt->fetchColumn()]);
     }
 
     public function update(int $userId, int $id): void

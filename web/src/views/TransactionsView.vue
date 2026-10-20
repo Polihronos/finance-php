@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { Banknote, CreditCard, Plus, SquarePen, Trash, X } from '@lucide/vue'
+import { Banknote, ChevronsDown, CreditCard, Plus, SquarePen, Trash, X } from '@lucide/vue'
 
 import { ApiError } from '@/api/client'
 import AppButton from '@/components/AppButton.vue'
@@ -34,6 +34,8 @@ const error = ref<string | null>(null)
 const loaded = ref(false)
 const adding = ref(false)
 const loading = ref(false)
+const loadingOlder = ref(false)
+const olderError = ref<string | null>(null)
 const openId = ref<number | null>(null)
 const editingId = ref<number | null>(null)
 const deletingId = ref<number | null>(null)
@@ -86,6 +88,18 @@ function categoryName(categoryId: number): string {
 
 function title(row: Transaction): string {
   return row.description ?? categoryName(row.category_id)
+}
+
+async function loadOlder(): Promise<void> {
+  olderError.value = null
+  loadingOlder.value = true
+  try {
+    await transactionsStore.loadOlder()
+  } catch (e) {
+    olderError.value = e instanceof ApiError ? e.message : 'cannot reach the server'
+  } finally {
+    loadingOlder.value = false
+  }
 }
 
 function showError(e: unknown): void {
@@ -152,7 +166,11 @@ onMounted(async () => {
     <TransactionForm v-if="adding" @close="adding = false" />
     <AppButton v-else class="wide" :icon="Plus" label="Add transaction" @click="adding = true" />
     <AppError v-if="error">{{ error }}</AppError>
-    <p v-else-if="loaded && months.length === 0" class="empty">No transactions yet</p>
+    <p v-else-if="loaded && months.length === 0" class="empty">
+      {{
+        transactionsStore.hasOlder ? 'No transactions in the last 3 months' : 'No transactions yet'
+      }}
+    </p>
     <section v-for="month in months" :key="month.key">
       <div class="divider">
         <span>{{ monthLabel(month.key) }}</span>
@@ -229,10 +247,25 @@ onMounted(async () => {
         </li>
       </ul>
     </section>
+    <AppButton
+      v-if="loaded && transactionsStore.hasOlder"
+      class="wide older"
+      :icon="ChevronsDown"
+      label="Load 3 more months"
+      variant="quiet"
+      :disabled="loadingOlder"
+      @click="loadOlder"
+    />
+    <AppError v-if="olderError">{{ olderError }}</AppError>
   </main>
 </template>
 
 <style scoped>
+.older {
+  margin-top: 1.5rem;
+  border: 1px dashed color-mix(in srgb, var(--text), transparent 70%);
+}
+
 li {
   display: grid;
   grid-template-columns: auto 1fr auto;

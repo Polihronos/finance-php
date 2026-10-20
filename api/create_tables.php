@@ -53,6 +53,10 @@ $pdo->exec("
 ");
 
 $pdo->exec("
+    CREATE INDEX IF NOT EXISTS user_date ON transactions (user_id, date)
+");
+
+$pdo->exec("
     CREATE TABLE IF NOT EXISTS sessions (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id INT UNSIGNED NOT NULL,

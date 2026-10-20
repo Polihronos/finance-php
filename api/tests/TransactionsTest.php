@@ -605,7 +605,7 @@ class TransactionsTest extends ApiTestCase
         $response = $this->listTransactions($user['token']);
 
         $this->assertSame(200, $response['status']);
-        $this->assertSame(['transactions' => []], $response['body']);
+        $this->assertSame(['transactions' => [], 'has_older' => false], $response['body']);
     }
 
     public function test_list_transactions(): void
@@ -630,6 +630,7 @@ class TransactionsTest extends ApiTestCase
                     'place' => 'Office',
                 ],
             ],
+            'has_older' => false,
         ], $response['body']);
     }
 
@@ -673,7 +674,137 @@ class TransactionsTest extends ApiTestCase
         $response = $this->listTransactions($secondUser['token']);
 
         $this->assertSame(200, $response['status']);
-        $this->assertSame(['transactions' => []], $response['body']);
+        $this->assertSame(['transactions' => [], 'has_older' => false], $response['body']);
+    }
+
+    // Date range: ?from= and ?to= return the transactions from the first day up to the day before to, and say whether older ones exist
+
+    public function test_list_transactions_between_dates(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Food');
+        $this->createTransaction($user['token'], $this->transactionBody(1, ['date' => '2026-07-31']));
+        $this->createTransaction($user['token'], $this->transactionBody(1, ['date' => '2026-08-01']));
+        $this->createTransaction($user['token'], $this->transactionBody(1, ['date' => '2026-10-31']));
+        $this->createTransaction($user['token'], $this->transactionBody(1, ['date' => '2026-11-01']));
+
+        $response = $this->listTransactionsBetween($user['token'], '2026-08-01', '2026-11-01');
+
+        $this->assertSame(200, $response['status']);
+        $this->assertSame([3, 2], array_column($response['body']['transactions'], 'id'));
+        $this->assertTrue($response['body']['has_older']);
+    }
+
+    public function test_list_transactions_between_dates_without_older(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Food');
+        $this->createTransaction($user['token'], $this->transactionBody(1, ['date' => '2026-10-12']));
+
+        $response = $this->listTransactionsBetween($user['token'], '2026-08-01', '2026-11-01');
+
+        $this->assertSame(200, $response['status']);
+        $this->assertSame([1], array_column($response['body']['transactions'], 'id'));
+        $this->assertFalse($response['body']['has_older']);
+    }
+
+    public function test_list_transactions_between_dates_empty_with_older(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Food');
+        $this->createTransaction($user['token'], $this->transactionBody(1, ['date' => '2026-01-12']));
+
+        $response = $this->listTransactionsBetween($user['token'], '2026-08-01', '2026-11-01');
+
+        $this->assertSame(200, $response['status']);
+        $this->assertSame(['transactions' => [], 'has_older' => true], $response['body']);
+    }
+
+    public function test_list_transactions_between_dates_only_own(): void
+    {
+        $firstUser = $this->registerUser('first@example.com');
+        $secondUser = $this->registerUser('second@example.com');
+        $this->createCategory($firstUser['token'], 'Food');
+        $this->createCategory($secondUser['token'], 'Rent');
+        $this->createTransaction($firstUser['token'], $this->transactionBody(1, ['date' => '2026-10-12']));
+        $this->createTransaction($secondUser['token'], $this->transactionBody(2, ['date' => '2026-10-12']));
+        $this->createTransaction($secondUser['token'], $this->transactionBody(2, ['date' => '2026-01-12']));
+
+        $response = $this->listTransactionsBetween($firstUser['token'], '2026-08-01', '2026-11-01');
+
+        $this->assertSame(200, $response['status']);
+        $this->assertSame([1], array_column($response['body']['transactions'], 'id'));
+        $this->assertFalse($response['body']['has_older']);
+    }
+
+    public function test_list_transactions_rejects_from_without_to(): void
+    {
+        $user = $this->registerUser();
+
+        $response = $this->get('/transactions?from=2026-08-01', ['Authorization: Bearer ' . $user['token']]);
+
+        $this->assertSame(400, $response['status']);
+        $this->assertSame(['error' => 'to is required'], $response['body']);
+    }
+
+    public function test_list_transactions_rejects_to_without_from(): void
+    {
+        $user = $this->registerUser();
+
+        $response = $this->get('/transactions?to=2026-11-01', ['Authorization: Bearer ' . $user['token']]);
+
+        $this->assertSame(400, $response['status']);
+        $this->assertSame(['error' => 'from is required'], $response['body']);
+    }
+
+    public function test_list_transactions_rejects_wrong_from_format(): void
+    {
+        $user = $this->registerUser();
+
+        $response = $this->listTransactionsBetween($user['token'], '2026-08', '2026-11-01');
+
+        $this->assertSame(400, $response['status']);
+        $this->assertSame(['error' => 'from must be in YYYY-MM-DD format'], $response['body']);
+    }
+
+    public function test_list_transactions_rejects_to_that_does_not_exist(): void
+    {
+        $user = $this->registerUser();
+
+        $response = $this->listTransactionsBetween($user['token'], '2026-08-01', '2026-02-30');
+
+        $this->assertSame(400, $response['status']);
+        $this->assertSame(['error' => 'to is not a real date'], $response['body']);
+    }
+
+    public function test_list_transactions_rejects_from_after_to(): void
+    {
+        $user = $this->registerUser();
+
+        $response = $this->listTransactionsBetween($user['token'], '2026-11-01', '2026-08-01');
+
+        $this->assertSame(400, $response['status']);
+        $this->assertSame(['error' => 'from must be before to'], $response['body']);
+    }
+
+    public function test_list_transactions_rejects_same_from_and_to(): void
+    {
+        $user = $this->registerUser();
+
+        $response = $this->listTransactionsBetween($user['token'], '2026-08-01', '2026-08-01');
+
+        $this->assertSame(400, $response['status']);
+        $this->assertSame(['error' => 'from must be before to'], $response['body']);
+    }
+
+    public function test_list_transactions_rejects_from_as_list(): void
+    {
+        $user = $this->registerUser();
+
+        $response = $this->get('/transactions?from[]=2026-08-01&to=2026-11-01', ['Authorization: Bearer ' . $user['token']]);
+
+        $this->assertSame(400, $response['status']);
+        $this->assertSame(['error' => 'from must be text'], $response['body']);
     }
 
     // Token check: requireUserId() in index.php answers 401 before list() runs
@@ -1361,6 +1492,11 @@ class TransactionsTest extends ApiTestCase
     private function listTransactions(string $token): array
     {
         return $this->get('/transactions', ['Authorization: Bearer ' . $token]);
+    }
+
+    private function listTransactionsBetween(string $token, string $from, string $to): array
+    {
+        return $this->get('/transactions?from=' . $from . '&to=' . $to, ['Authorization: Bearer ' . $token]);
     }
 
     private function updateTransaction(string $token, int $id, array $body): array

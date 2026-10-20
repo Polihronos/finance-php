@@ -42,25 +42,25 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-// List: gets the transactions without a body, the token goes in the header
+// List: gets the transactions between two dates without a body, the token goes in the header
 
-test('listTransactions gets the transactions', async () => {
-  const fetchMock = fakeFetch(200, JSON.stringify({ transactions: [saved] }))
+test('listTransactions gets the transactions between two dates', async () => {
+  const fetchMock = fakeFetch(200, JSON.stringify({ transactions: [saved], has_older: true }))
 
-  const answer = await listTransactions()
+  const answer = await listTransactions({ from: '2026-08-01', to: '2026-11-01' })
 
-  expect(fetchMock).toHaveBeenCalledWith('/api/transactions', {
+  expect(fetchMock).toHaveBeenCalledWith('/api/transactions?from=2026-08-01&to=2026-11-01', {
     method: 'GET',
     headers: { Authorization: `Bearer ${token}` },
     body: undefined,
   })
-  expect(answer).toStrictEqual({ transactions: [saved] })
+  expect(answer).toStrictEqual({ transactions: [saved], has_older: true })
 })
 
 test('listTransactions passes on the api error', async () => {
   fakeFetch(401, '{"error":"not logged in"}')
 
-  const promise = listTransactions()
+  const promise = listTransactions({ from: '2026-08-01', to: '2026-11-01' })
 
   await expect(promise).rejects.toBeInstanceOf(ApiError)
   await expect(promise).rejects.toMatchObject({ status: 401, message: 'not logged in' })

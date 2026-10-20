@@ -56,7 +56,8 @@ Deletion rules:
 - A category cannot be deleted while transactions still use it.
 
 `transactions` has an index on `(user_id, description)`, so suggestions find a user's matching
-descriptions without reading all of their transactions.
+descriptions without reading all of their transactions, and one on `(user_id, date)`, so loading a
+few months reads only those months.
 
 ## API request flow
 
@@ -233,7 +234,7 @@ $env:APP_ENV = 'testing'; php create_tables.php; Remove-Item Env:APP_ENV
 `APP_ENV=testing` makes the script read `.env.testing` instead of `.env`.
 
 The script does not change tables that already exist, except that it adds the `user_description`
-index to `transactions` when it is missing. Databases created before category names became unique
+and `user_date` indexes to `transactions` when they are missing. Databases created before category names became unique
 need this once, in both databases:
 
 ```sql
@@ -546,13 +547,29 @@ so cents stay exact:
 ### `GET /transactions`
 
 No request body. `200 OK`, newest date first. Transactions on the same date show the one added last
-first.
+first. Without `from` and `to` it returns every transaction and `has_older` is `false`.
 
-```json
-{"transactions": [{"id": 2, "category_id": 1, "amount": "4.20", "currency": "EUR", "date": "2026-10-12", "payment_method": "cash", "description": null, "place": null}, {"id": 1, "category_id": 1, "amount": "12.50", "currency": "EUR", "date": "2026-10-01", "payment_method": "card", "description": "Lunch", "place": null}]}
+To load only some months, send both dates. `from` is included and `to` is not, so this returns
+August, September and October 2026:
+
+```
+GET /transactions?from=2026-08-01&to=2026-11-01
 ```
 
-A user without transactions gets `{"transactions": []}`.
+```json
+{"transactions": [{"id": 2, "category_id": 1, "amount": "4.20", "currency": "EUR", "date": "2026-10-12", "payment_method": "cash", "description": null, "place": null}], "has_older": true}
+```
+
+`has_older` is `true` when the user has transactions dated before `from`, so the app knows whether
+to offer loading more. A user without transactions gets `{"transactions": [], "has_older": false}`.
+
+| Status | Error | When |
+|---|---|---|
+| `400` | `from is required` (or `to`) | Only one of the two is sent |
+| `400` | `from must be text` (or `to`) | A list, for example `from[]=2026-08-01` |
+| `400` | `from must be in YYYY-MM-DD format` (or `to`) | For example `2026-08` |
+| `400` | `from is not a real date` (or `to`) | For example `2026-02-30` |
+| `400` | `from must be before to` | `from` is the same day as `to` or later |
 
 ### `GET /transactions/suggestions`
 
@@ -704,7 +721,7 @@ from the same state.
 | `tests/LoginTest.php` | Successful login, body and field checks, wrong and unknown credentials, email capitals |
 | `tests/LogoutTest.php` | Logout of one session, and the token check: missing, malformed, unknown, reused and expired tokens |
 | `tests/CategoriesTest.php` | Create, list, rename and delete: name checks, duplicates, sorting, other users' categories, categories used by transactions, token check. Stats: totals for a month or a year, first and last day of a month, December into January, other users' data, period checks |
-| `tests/TransactionsTest.php` | Create, list, edit and delete: checks for every field, defaults and cleanup of values, sorting, other users' transactions and categories, token check. Suggestions: matching the start, capitals, one per description, order, newest category and place, at most 8, `%` and `_` as plain text, query checks |
+| `tests/TransactionsTest.php` | Create, list, edit and delete: checks for every field, defaults and cleanup of values, sorting, other users' transactions and categories, token check. Suggestions: matching the start, capitals, one per description, order, newest category and place, at most 8, `%` and `_` as plain text, query checks. Date ranges: first day in and last day out, `has_older`, other users' data, date checks |
 | `tests/ApiTestCase.php` | Shared setup: test server, database reset, `post()`, `put()`, `get()` and `delete()` (plus `postRaw()` and `putRaw()` for bodies that are not JSON) with optional extra headers, `countUsers()`, `countSessions()` |
 
 ### Web app

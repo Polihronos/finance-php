@@ -57,8 +57,14 @@ export type TransactionInput = {
   place: string | null
 }
 
+export type DateRange = {
+  from: string
+  to: string
+}
+
 export type TransactionsResponse = {
   transactions: Transaction[]
+  has_older: boolean
 }
 
 export type TransactionResponse = {
