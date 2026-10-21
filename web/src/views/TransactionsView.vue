@@ -5,10 +5,12 @@ import { Banknote, ChevronsDown, CreditCard, Plus, SquarePen, Trash, X } from '@
 import { ApiError } from '@/api/client'
 import AppButton from '@/components/AppButton.vue'
 import AppError from '@/components/AppError.vue'
+import CategoryBadge from '@/components/CategoryBadge.vue'
 import TransactionForm from '@/components/TransactionForm.vue'
-import type { Transaction } from '@/api/types'
+import type { Category, Transaction } from '@/api/types'
 import { useCategoriesStore } from '@/stores/categories'
 import { useTransactionsStore } from '@/stores/transactions'
+import { DEFAULT_COLOR, DEFAULT_ICON } from '@/utils/categoryStyle'
 import { formatEur } from '@/utils/money'
 
 const MONTHS = [
@@ -41,8 +43,10 @@ const editingId = ref<number | null>(null)
 const deletingId = ref<number | null>(null)
 const thisYear = new Date().getFullYear()
 
-const categoryNames = computed(
-  () => new Map(categoriesStore.categories.map((category) => [category.id, category.name])),
+const UNKNOWN_CATEGORY: Category = { id: 0, name: '', icon: DEFAULT_ICON, color: DEFAULT_COLOR }
+
+const categoriesById = computed(
+  () => new Map(categoriesStore.categories.map((category) => [category.id, category])),
 )
 
 const months = computed(() => {
@@ -82,12 +86,12 @@ function centsLabel(cents: number): string {
   return formatEur((cents / 100).toFixed(2))
 }
 
-function categoryName(categoryId: number): string {
-  return categoryNames.value.get(categoryId) ?? ''
+function categoryOf(row: Transaction): Category {
+  return categoriesById.value.get(row.category_id) ?? UNKNOWN_CATEGORY
 }
 
 function title(row: Transaction): string {
-  return row.description ?? categoryName(row.category_id)
+  return row.description ?? categoryOf(row).name
 }
 
 async function loadOlder(): Promise<void> {
@@ -145,10 +149,6 @@ async function confirmDelete(id: number): Promise<void> {
   }
 }
 
-function details(row: Transaction): string {
-  return [categoryName(row.category_id), row.place].filter((part) => part).join(' | ')
-}
-
 onMounted(async () => {
   try {
     await Promise.all([transactionsStore.load(), categoriesStore.load()])
@@ -199,7 +199,12 @@ onMounted(async () => {
             </span>
             <span class="name">{{ title(row) }}</span>
             <span class="amount">{{ formatEur(row.amount) }}</span>
-            <span class="details muted">{{ details(row) }}</span>
+            <span class="details muted">
+              <CategoryBadge small :icon="categoryOf(row).icon" :color="categoryOf(row).color" />
+              <span>
+                {{ categoryOf(row).name }}<template v-if="row.place"> | {{ row.place }}</template>
+              </span>
+            </span>
             <component
               :is="row.payment_method === 'cash' ? Banknote : CreditCard"
               :class="['method', row.payment_method]"
@@ -310,6 +315,9 @@ li.editing {
 }
 
 .details {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
   overflow-wrap: anywhere;
 }
 

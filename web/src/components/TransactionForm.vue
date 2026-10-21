@@ -10,6 +10,7 @@ import AppButton from '@/components/AppButton.vue'
 import AppError from '@/components/AppError.vue'
 import { useCategoriesStore } from '@/stores/categories'
 import { useTransactionsStore } from '@/stores/transactions'
+import { CATEGORY_COLORS, CATEGORY_ICONS } from '@/utils/categoryStyle'
 
 const { transaction } = defineProps<{ transaction?: Transaction }>()
 const emit = defineEmits<{ close: [] }>()
@@ -135,8 +136,14 @@ async function save(): Promise<void> {
     </label>
     <fieldset v-if="categoriesStore.categories.length > 0" class="choices categories">
       <legend>Category</legend>
-      <label v-for="category in categoriesStore.categories" :key="category.id">
+      <label
+        v-for="category in categoriesStore.categories"
+        :key="category.id"
+        class="category"
+        :style="{ '--choice': CATEGORY_COLORS[category.color] }"
+      >
         <input v-model="categoryId" type="radio" name="category" :value="category.id" required />
+        <component :is="CATEGORY_ICONS[category.icon]" aria-hidden="true" />
         {{ category.name }}
       </label>
     </fieldset>
@@ -176,6 +183,16 @@ async function save(): Promise<void> {
 <style scoped>
 .categories {
   grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+}
+
+.category svg {
+  color: var(--choice);
+}
+
+.category:has(:checked) {
+  border-color: var(--choice);
+  background: color-mix(in srgb, var(--choice), transparent 90%);
+  color: var(--choice);
 }
 
 .cash:has(:checked) {

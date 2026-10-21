@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import type { Category, CategoryStats } from '@/api/types'
+import type { Category, CategoryInput, CategoryStats } from '@/api/types'
 import * as categoriesApi from '@/api/categories'
 import { usePeriodStore } from '@/stores/period'
 
@@ -24,13 +24,13 @@ export const useCategoriesStore = defineStore('categories', () => {
     stats.value = answer.stats
   }
 
-  async function create(name: string): Promise<void> {
-    await categoriesApi.createCategory(name)
+  async function create(input: CategoryInput): Promise<void> {
+    await categoriesApi.createCategory(input)
     await load()
   }
 
-  async function rename(id: number, name: string): Promise<void> {
-    await categoriesApi.renameCategory(id, name)
+  async function update(id: number, input: CategoryInput): Promise<void> {
+    await categoriesApi.updateCategory(id, input)
     await load()
   }
 
@@ -39,9 +39,14 @@ export const useCategoriesStore = defineStore('categories', () => {
     await load()
   }
 
+  function clear(): void {
+    categories.value = []
+    stats.value = []
+  }
+
   function statsFor(categoryId: number): CategoryStats | undefined {
     return stats.value.find((row) => row.category_id === categoryId)
   }
 
-  return { categories, stats, load, loadStats, create, rename, remove, statsFor }
+  return { categories, stats, load, loadStats, create, update, remove, statsFor, clear }
 })

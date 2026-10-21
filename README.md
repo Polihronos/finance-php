@@ -33,7 +33,8 @@ Web app:
 | Log in | Done, logic tested |
 | Create account | Done, logic tested |
 | Expired sessions | Done, logic tested |
-| Log out | Logic done and tested. The button in the header is commented out for now |
+| Log out | Logic done and tested, including emptying the transactions and categories in memory. The button in the header is commented out for now |
+| Unknown addresses | Done, tested: they lead to Transactions, or to log in when logged out |
 | Protected screens | Done |
 | Transactions | Done, logic tested: list by month with month totals, 3 months at a time, add, edit, delete, suggestions while typing |
 | Categories | Done, logic tested: add, rename, delete, what was spent and the number of transactions per category in any month or year |
@@ -48,7 +49,7 @@ Web app:
 |---|---|
 | `users` | Name, email, password hash, role, creation date |
 | `sessions` | One row per login: the user, a SHA-256 hash of the token, creation and expiry date |
-| `categories` | A user's own spending categories. Names are unique per user, capitals ignored. |
+| `categories` | A user's own spending categories, each with an icon and a color. Names are unique per user, capitals ignored. |
 | `transactions` | Amount, currency, date, payment method, description, place, optional photo path |
 
 Deletion rules:
@@ -70,6 +71,8 @@ few months reads only those months.
 api/                  The PHP API. Every PHP command in this README runs from this folder.
 web/                  The Vue web app. Every npm command in this README runs from this folder.
 docs/images/          Diagrams.
+docs/diagrams/        The Excalidraw files of the diagrams. Open one on excalidraw.com to change
+                      it, then export it over the picture in docs/images/.
 docs/icons/           Dog pictures. The app icon in the header is made from dog-01.png.
 README.md             This file.
 ```
@@ -108,10 +111,11 @@ src/main.ts                       Entry point. Loads the font and styles, starts
                                   the router, and sends the user to log in when the API answers 401.
 src/App.vue                       Shows the screen of the current route.
 src/router/index.ts               The routes, and the guard that keeps logged-out users on log in.
-                                  / goes to /transactions.
+                                  / and any unknown address go to /transactions.
 src/api/client.ts                 request(): every API call goes through it. Adds the token, sends
                                   and reads JSON, and turns an error answer into an ApiError.
-src/api/types.ts                  The shapes of the API's answers.
+src/api/types.ts                  The shapes of the API's answers, and the category icon and color
+                                  names the API accepts.
 src/api/auth.ts                   register(), login() and logout(): one function per endpoint.
 src/api/categories.ts             The category endpoints and the stats endpoint, one function each.
 src/api/transactions.ts           The transaction endpoints and the suggestions endpoint, one
@@ -124,11 +128,17 @@ src/stores/period.ts              Monthly or yearly, saved in localStorage, the 
 src/stores/transactions.ts        The loaded months of transactions, newest first. load() gets the
                                   last 3 months, loadOlder() the 3 before them.
 src/utils/money.ts                formatEur(): how every amount is shown.
+src/utils/categoryStyle.ts        The Lucide icon and the color code for every category icon and
+                                  color name, and the defaults for a new category.
 src/views/                        One file per screen: LoginView, RegisterView, TransactionsView,
                                   CategoriesView.
 src/components/AppLayout.vue      Around every protected screen: the header with the dog icon, which
                                   links to Transactions, and the tab bar at the bottom.
 src/components/TransactionForm.vue  The add and edit form, with suggestions while typing.
+src/components/CategoryBadge.vue  A category's icon, drawn as plain lines in its color. Small on
+                                  transaction cards.
+src/components/CategoryStylePicker.vue  Color dots and the icon grid, used to add and edit a
+                                  category.
 src/components/AppButton.vue      The only button: always an icon, with text or icon only.
 src/components/AppError.vue       The error note shown in forms.
 src/components/PasswordInput.vue  Password field with a button to show or hide the password.
@@ -247,8 +257,9 @@ $env:APP_ENV = 'testing'; php create_tables.php; Remove-Item Env:APP_ENV
 
 `APP_ENV=testing` makes the script read `.env.testing` instead of `.env`.
 
-The script does not change tables that already exist, except that it adds the `user_description`
-and `user_date` indexes to `transactions` when they are missing. Databases created before category names became unique
+The script does not change tables that already exist, except that it adds what is missing: the
+`icon` and `color` columns of `categories`, and the `user_description` and `user_date` indexes of
+`transactions`. Databases created before category names became unique
 need this once, in both databases:
 
 ```sql
@@ -388,27 +399,40 @@ All category endpoints are protected and only see the logged-in user's own categ
 category of another user gets the same `404` as one that does not exist, so ids of other users
 cannot be discovered. Every category endpoint can also answer `401` with `not logged in`.
 
-Names are checked the same way on create and rename:
+Create and edit check the fields the same way:
+
+| Field | Required | Rule |
+|---|---|---|
+| `name` | yes | Text, at most 100 characters |
+| `icon` | no | One of `shopping-cart`, `utensils`, `coffee`, `car`, `fuel`, `bus`, `plane`, `house`, `zap`, `droplet`, `wifi`, `smartphone`, `heart-pulse`, `pill`, `shirt`, `gift`, `film`, `gamepad-2`, `dumbbell`, `graduation-cap`, `baby`, `paw-print`, `briefcase`, `piggy-bank`, `tag` |
+| `color` | no | One of `red`, `orange`, `yellow`, `green`, `blue`, `purple` |
+
+Icons are Lucide icon names and colors are names, not codes, so the web app and a phone app can
+draw them their own way. A new category without `icon` or `color` gets `tag` and `blue`. An edit
+without them keeps the ones the category has. Existing categories got `tag` and `blue` when the
+columns were added.
 
 | Status | Error | When |
 |---|---|---|
 | `400` | `request body must be JSON` | The body is not a JSON object |
 | `400` | `name is required` | Missing, `null` or empty. A name of only spaces counts as empty. |
-| `400` | `name must be text` | A number, list or other non-text value |
+| `400` | `name must be text` (or `icon`, `color`) | A number, list or other non-text value |
 | `400` | `name must be at most 100 characters` | Longer than 100 characters, counted after trimming |
+| `400` | `icon must be one of:` and the icon list | Not a name from the list. Capitals count |
+| `400` | `color must be one of: red, orange, yellow, green, blue, purple` | Not a name from the list. Capitals count |
 
 Spaces at the start and end of a name are removed before it is saved.
 
 ### `POST /categories`
 
 ```json
-{"name": "Food"}
+{"name": "Food", "icon": "utensils", "color": "orange"}
 ```
 
 `201 Created`:
 
 ```json
-{"success": true, "category_id": 1, "name": "Food"}
+{"success": true, "category_id": 1, "name": "Food", "icon": "utensils", "color": "orange"}
 ```
 
 | Status | Error | When |
@@ -422,7 +446,7 @@ Two users can each have a category with the same name.
 No request body. `200 OK`, sorted by name:
 
 ```json
-{"categories": [{"id": 2, "name": "Bills"}, {"id": 1, "name": "Food"}]}
+{"categories": [{"id": 2, "name": "Bills", "icon": "zap", "color": "yellow"}, {"id": 1, "name": "Food", "icon": "utensils", "color": "orange"}]}
 ```
 
 A user without categories gets `{"categories": []}`.
@@ -458,16 +482,16 @@ A user without categories gets `{"stats": []}`.
 
 ### `PUT /categories/{id}`
 
-Renames a category.
+Edits a category: its name, and its icon and color when they are sent.
 
 ```json
-{"name": "Groceries"}
+{"name": "Groceries", "icon": "shopping-cart", "color": "green"}
 ```
 
-`200 OK`:
+`200 OK`, with what is saved now:
 
 ```json
-{"success": true, "category_id": 1, "name": "Groceries"}
+{"success": true, "category_id": 1, "name": "Groceries", "icon": "shopping-cart", "color": "green"}
 ```
 
 | Status | Error | When |
@@ -675,8 +699,8 @@ Each layer only calls the one below it. `client.ts` knows nothing about the stor
 | Log in or create account | The token from the API is saved in the store, in `localStorage` and in `client.ts` |
 | Page reload | The token is read back from `localStorage`, so the user stays logged in |
 | Opening a screen | Every screen needs a token unless its route has `meta: { guest: true }`. Log in and create account are the only guest screens. Without a token the user goes to log in, with one a guest screen sends them to Transactions |
-| Log out | The API ends the session. The token is removed on this device even when that call fails |
-| Any answer `401` while logged in | The session expired or was ended elsewhere: the token is removed and the user goes to log in. A `401` without a token, a wrong password, does not do this |
+| Log out | The API ends the session. The token is removed on this device even when that call fails, and the transactions and categories in memory are emptied, so the next person on this browser sees none of them |
+| Any answer `401` while logged in | The session expired or was ended elsewhere: the token is removed, the transactions and categories in memory are emptied and the user goes to log in. A `401` without a token, a wrong password, does not do this |
 
 The API stays the only judge of what is valid. The browser only checks what is cheap to check
 early: required fields, the email format and the password length.
@@ -685,23 +709,24 @@ early: required fields, the email format and the password length.
 
 | Moment | What happens |
 |---|---|
-| Opening Categories | The categories and the stats of this month are loaded together. Each card shows the name, what was spent in that month on the left and the number of its transactions on the right |
+| Opening Categories | The categories and the stats of this month are loaded together. Each card shows the category's icon in its color, the name, what was spent in that month under it and the number of its transactions on the right |
+| Adding | The icon button in front of the name shows the icon and color the new category gets, a blue tag at first. Tapping it opens the color dots and the icon grid. The icons are grey and the chosen one is bigger and in the chosen color |
 | Moon and sun toggle in the header | Switches between the chosen month and its year and asks the API for the stats again. Nothing is averaged or estimated: the year shows what was spent in the year. The choice is saved in `localStorage` |
 | Arrows above the list | Show the month before or after, or the year before or after when yearly is on. The month or year is named between them. The next arrow stops at this month or this year. Each step asks the API for the stats of that period |
-| Clicking a card | Opens it and shows the rename and delete buttons. Only one card is open at a time, clicking it again closes it |
-| Rename | The name turns into a field. Enter or ✓ saves, Esc or X cancels |
+| Clicking a card | Opens it and shows the edit and delete buttons. Only one card is open at a time, clicking it again closes it |
+| Edit | The card turns into the same icon button and name field as adding, already filled in, with X and ✓ right next to the name. The icon button opens the colors and icons. Enter or ✓ saves name, icon and color together, Esc or X cancels. Taps elsewhere in the card do not close it |
 | Delete | The card asks "Delete Food?" first. A category that still has transactions is not deleted and the API's error is shown |
 
-After every add, rename or delete the list and the stats are loaded again, so the order and the
+After every add, edit or delete the list and the stats are loaded again, so the order and the
 numbers always match the database.
 
 ### Transactions in the browser
 
 | Moment | What happens |
 |---|---|
-| Opening Transactions | This month and the 2 before it are loaded, newest first, grouped by month. Each month starts with a line with its name and total. Each card shows the date with its weekday, the description or else the category, the amount, the category and place, and a red card or orange banknote icon |
+| Opening Transactions | This month and the 2 before it are loaded, newest first, grouped by month. Each month starts with a line with its name and total. Each card shows the date with its weekday, the description or else the category, the amount, the category with its small icon in its color, the place, and a red card or orange banknote icon |
 | Load 3 more months | Shown while older transactions exist. Each press adds the 3 months before the oldest one on screen. It disappears when nothing older is left |
-| Add transaction | Opens the form above the list. The date starts on today and Card is chosen. Category and Card or Cash are buttons. Without categories an Add category button leads to Categories |
+| Add transaction | Opens the form above the list. The date starts on today and Card is chosen. Category and Card or Cash are buttons. Each category button shows the category's icon in its color, and the chosen one takes that color. Without categories an Add category button leads to Categories |
 | Typing a description | 200 ms after the last key the API is asked for suggestions, and older answers are ignored. Picking a suggestion, or typing it in full, fills in its category and place and its saved spelling |
 | Amount | Takes digits with a comma or a point and at most 2 decimals. Anything else is dropped while typing |
 | Clicking a card | Opens it and shows the edit and delete buttons, like on Categories. Edit opens the same form inside the card, already filled in |
@@ -711,7 +736,8 @@ numbers always match the database.
 ### Moving around
 
 The tab bar at the bottom links Transactions and Categories, and the current page is red. The dog
-in the header also leads to Transactions. On a computer everything stays in a phone-wide column.
+in the header also leads to Transactions, and so does any unknown address. On a computer
+everything stays in a phone-wide column.
 
 ### Design
 
@@ -723,6 +749,7 @@ in the header also leads to Transactions. On a computer everything stays in a ph
 | Buttons | Always `AppButton`: an icon plus text, or only an icon with its text as the accessible name and tooltip. `variant="quiet"` drops the red fill |
 | Errors | `AppError`: a yellow note with a stripe and a ghost icon, above the form's button |
 | Amounts | `formatEur()`: a comma for cents and `EUR` after, whole euros without `,00` |
+| Category colors | Red and orange are the theme's `--primary` and `--secondary`, plus yellow, green, blue and purple. Icons are drawn as plain lines in the color, with no circle or square around them |
 | Shared styles | `.list`, `.list-item`, `.list-actions`, `.choices`, `.divider`, `.muted`, `.empty` and `.wide` in `main.css`, used by both pages |
 
 Text is always shown with `{{ }}`, which Vue escapes. ESLint refuses `v-html`, so text from the API
@@ -755,7 +782,7 @@ from the same state.
 | `tests/RegisterTest.php` | Successful registration, body and field checks, email format, password length, duplicate emails |
 | `tests/LoginTest.php` | Successful login, body and field checks, wrong and unknown credentials, email capitals |
 | `tests/LogoutTest.php` | Logout of one session, and the token check: missing, malformed, unknown, reused and expired tokens |
-| `tests/CategoriesTest.php` | Create, list, rename and delete: name checks, duplicates, sorting, other users' categories, categories used by transactions, token check. Stats: totals for a month or a year, first and last day of a month, December into January, other users' data, period checks |
+| `tests/CategoriesTest.php` | Create, list, edit and delete: name checks, icon and color with their defaults and lists, keeping them on an edit without them, duplicates, sorting, other users' categories, categories used by transactions, token check. Stats: totals for a month or a year, first and last day of a month, December into January, other users' data, period checks |
 | `tests/TransactionsTest.php` | Create, list, edit and delete: checks for every field, defaults and cleanup of values, sorting, other users' transactions and categories, token check. Suggestions: matching the start, capitals, one per description, order, newest category and place, at most 8, `%` and `_` as plain text, query checks. Date ranges: first day in and last day out, `has_older`, other users' data, date checks |
 | `tests/ApiTestCase.php` | Shared setup: test server, database reset, `post()`, `put()`, `get()` and `delete()` (plus `postRaw()` and `putRaw()` for bodies that are not JSON) with optional extra headers, `countUsers()`, `countSessions()` |
 
@@ -776,13 +803,15 @@ needs.
 |---|---|
 | `src/api/__tests__/client.spec.ts` | The path, JSON body and token header of every request, success and error answers, answers that are not JSON, and which `401` answers call the handler set with `setUnauthorizedHandler()` |
 | `src/api/__tests__/auth.spec.ts` | Register, login and logout: what each sends, what it returns, and that API errors reach the caller |
-| `src/stores/__tests__/auth.spec.ts` | The token after start, login, register, logout and forget, in the store, in `localStorage` and in the requests that follow, also when the API fails |
-| `src/api/__tests__/categories.spec.ts` | List, create, rename, delete, and stats for a month or a year: what each sends, what it returns, and that API errors reach the caller |
-| `src/stores/__tests__/categories.spec.ts` | Loading categories and the stats of the chosen month or year together, `loadStats()` alone, loading again only after a successful change, and `statsFor()` |
+| `src/stores/__tests__/auth.spec.ts` | The token after start, login, register, logout and forget, in the store, in `localStorage` and in the requests that follow, also when the API fails, and that logout and forget empty the transactions and categories |
+| `src/api/__tests__/categories.spec.ts` | List, create, update, delete, and stats for a month or a year: what each sends, including icon and color, what it returns, and that API errors reach the caller |
+| `src/stores/__tests__/categories.spec.ts` | Loading categories with their icon and color and the stats of the chosen month or year together, `loadStats()` alone, create and update sending icon and color, loading again only after a successful change, `statsFor()` and `clear()` |
 | `src/stores/__tests__/period.spec.ts` | The saved choice at start, a broken saved value, saving on every toggle, the chosen month starting on this month, asking for that month or its year, moving one month or year back also over the new year, never past this month, and the label |
 | `src/api/__tests__/transactions.spec.ts` | List between two dates, create, update, delete and suggestions: what each sends, what it returns, that the typed text is encoded, and that API errors reach the caller |
-| `src/stores/__tests__/transactions.spec.ts` | Loading the last 3 months, loading 3 more also over the new year, keeping the list sorted after create and update without loading again, leaving out transactions older than the loaded months, and failures |
+| `src/stores/__tests__/transactions.spec.ts` | Loading the last 3 months, loading 3 more also over the new year, keeping the list sorted after create and update without loading again, leaving out transactions older than the loaded months, failures, and `clear()` |
 | `src/utils/__tests__/money.spec.ts` | A comma for cents and no `,00` on whole euros |
+| `src/utils/__tests__/categoryStyle.spec.ts` | Every icon and color name the API accepts has an icon or a color code, and new categories start as a blue tag |
+| `src/router/__tests__/index.spec.ts` | Unknown addresses lead to Transactions, or to log in when logged out |
 | `src/api/__tests__/fakeFetch.ts` | Shared helper: replaces `fetch` with a fake that answers with a given status and body |
 
 Other checks, from the same folder:

@@ -8,9 +8,46 @@ export type SuccessResponse = {
   success: boolean
 }
 
+export type CategoryIcon =
+  | 'shopping-cart'
+  | 'utensils'
+  | 'coffee'
+  | 'car'
+  | 'fuel'
+  | 'bus'
+  | 'plane'
+  | 'house'
+  | 'zap'
+  | 'droplet'
+  | 'wifi'
+  | 'smartphone'
+  | 'heart-pulse'
+  | 'pill'
+  | 'shirt'
+  | 'gift'
+  | 'film'
+  | 'gamepad-2'
+  | 'dumbbell'
+  | 'graduation-cap'
+  | 'baby'
+  | 'paw-print'
+  | 'briefcase'
+  | 'piggy-bank'
+  | 'tag'
+
+export type CategoryColor = 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple'
+
 export type Category = {
   id: number
   name: string
+  icon: CategoryIcon
+  color: CategoryColor
+}
+
+export type CategoryInput = {
+  name: string
+  icon?: CategoryIcon
+  color?: CategoryColor
 }
 
 export type CategoriesResponse = {
@@ -21,6 +58,8 @@ export type CategoryResponse = {
   success: boolean
   category_id: number
   name: string
+  icon: CategoryIcon
+  color: CategoryColor
 }
 
 export type CategoryStats = {

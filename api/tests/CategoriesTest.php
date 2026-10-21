@@ -17,6 +17,8 @@ class CategoriesTest extends ApiTestCase
             'success' => true,
             'category_id' => 1,
             'name' => 'Food',
+            'icon' => 'tag',
+            'color' => 'blue',
         ], $response['body']);
         $this->assertSame(1, $this->countCategories());
     }
@@ -112,6 +114,67 @@ class CategoriesTest extends ApiTestCase
         $this->assertSame(201, $firstResponse['status']);
         $this->assertSame(201, $secondResponse['status']);
         $this->assertSame(2, $this->countCategories());
+    }
+
+    // Icon and color: optional, tag and blue when left out, only names from ICONS and COLORS
+
+    public function test_create_category_with_icon_and_color(): void
+    {
+        $user = $this->registerUser();
+
+        $response = $this->createCategoryWith($user['token'], ['name' => 'Food', 'icon' => 'utensils', 'color' => 'orange']);
+
+        $this->assertSame(201, $response['status']);
+        $this->assertSame([
+            'success' => true,
+            'category_id' => 1,
+            'name' => 'Food',
+            'icon' => 'utensils',
+            'color' => 'orange',
+        ], $response['body']);
+        $this->assertSame(['icon' => 'utensils', 'color' => 'orange'], $this->categoryStyle(1));
+    }
+
+    public function test_create_category_rejects_unknown_icon(): void
+    {
+        $user = $this->registerUser();
+
+        $response = $this->createCategoryWith($user['token'], ['name' => 'Food', 'icon' => 'rocket']);
+
+        $this->assertSame(400, $response['status']);
+        $this->assertStringStartsWith('icon must be one of: shopping-cart, utensils', $response['body']['error']);
+        $this->assertSame(0, $this->countCategories());
+    }
+
+    public function test_create_category_rejects_icon_as_number(): void
+    {
+        $user = $this->registerUser();
+
+        $response = $this->createCategoryWith($user['token'], ['name' => 'Food', 'icon' => 5]);
+
+        $this->assertSame(400, $response['status']);
+        $this->assertSame(['error' => 'icon must be text'], $response['body']);
+    }
+
+    public function test_create_category_rejects_unknown_color(): void
+    {
+        $user = $this->registerUser();
+
+        $response = $this->createCategoryWith($user['token'], ['name' => 'Food', 'color' => 'pink']);
+
+        $this->assertSame(400, $response['status']);
+        $this->assertSame(['error' => 'color must be one of: red, orange, yellow, green, blue, purple'], $response['body']);
+        $this->assertSame(0, $this->countCategories());
+    }
+
+    public function test_create_category_rejects_color_with_capitals(): void
+    {
+        $user = $this->registerUser();
+
+        $response = $this->createCategoryWith($user['token'], ['name' => 'Food', 'color' => 'Blue']);
+
+        $this->assertSame(400, $response['status']);
+        $this->assertSame(['error' => 'color must be one of: red, orange, yellow, green, blue, purple'], $response['body']);
     }
 
     // Request body: Request::json() must return a JSON object, otherwise 400
@@ -307,7 +370,7 @@ class CategoriesTest extends ApiTestCase
         $this->assertSame(200, $response['status']);
         $this->assertSame([
             'categories' => [
-                ['id' => 1, 'name' => 'Food'],
+                ['id' => 1, 'name' => 'Food', 'icon' => 'tag', 'color' => 'blue'],
             ],
         ], $response['body']);
     }
@@ -324,9 +387,9 @@ class CategoriesTest extends ApiTestCase
         $this->assertSame(200, $response['status']);
         $this->assertSame([
             'categories' => [
-                ['id' => 2, 'name' => 'Bills'],
-                ['id' => 1, 'name' => 'Food'],
-                ['id' => 3, 'name' => 'Rent'],
+                ['id' => 2, 'name' => 'Bills', 'icon' => 'tag', 'color' => 'blue'],
+                ['id' => 1, 'name' => 'Food', 'icon' => 'tag', 'color' => 'blue'],
+                ['id' => 3, 'name' => 'Rent', 'icon' => 'tag', 'color' => 'blue'],
             ],
         ], $response['body']);
     }
@@ -341,8 +404,8 @@ class CategoriesTest extends ApiTestCase
         $firstResponse = $this->listCategories($firstUser['token']);
         $secondResponse = $this->listCategories($secondUser['token']);
 
-        $this->assertSame(['categories' => [['id' => 1, 'name' => 'Food']]], $firstResponse['body']);
-        $this->assertSame(['categories' => [['id' => 2, 'name' => 'Rent']]], $secondResponse['body']);
+        $this->assertSame([1], array_column($firstResponse['body']['categories'], 'id'));
+        $this->assertSame([2], array_column($secondResponse['body']['categories'], 'id'));
     }
 
     public function test_list_categories_empty_for_other_user(): void
@@ -382,7 +445,7 @@ class CategoriesTest extends ApiTestCase
         $this->assertSame(['error' => 'not logged in'], $response['body']);
     }
 
-    // Successful update: PUT /categories/{id} renames the logged-in user's category
+    // Successful update: PUT /categories/{id} changes the name, and the icon and color when they are sent
 
     public function test_update_category(): void
     {
@@ -396,6 +459,8 @@ class CategoriesTest extends ApiTestCase
             'success' => true,
             'category_id' => 1,
             'name' => 'Groceries',
+            'icon' => 'tag',
+            'color' => 'blue',
         ], $response['body']);
         $this->assertSame('Groceries', $this->categoryName(1));
     }
@@ -432,6 +497,49 @@ class CategoriesTest extends ApiTestCase
 
         $this->assertSame(200, $response['status']);
         $this->assertSame('food', $this->categoryName(1));
+    }
+
+    public function test_update_category_icon_and_color(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Food');
+
+        $response = $this->updateCategoryWith($user['token'], 1, ['name' => 'Food', 'icon' => 'coffee', 'color' => 'green']);
+
+        $this->assertSame(200, $response['status']);
+        $this->assertSame([
+            'success' => true,
+            'category_id' => 1,
+            'name' => 'Food',
+            'icon' => 'coffee',
+            'color' => 'green',
+        ], $response['body']);
+        $this->assertSame(['icon' => 'coffee', 'color' => 'green'], $this->categoryStyle(1));
+    }
+
+    public function test_update_category_keeps_icon_and_color_when_left_out(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategoryWith($user['token'], ['name' => 'Food', 'icon' => 'utensils', 'color' => 'orange']);
+
+        $response = $this->updateCategory($user['token'], 1, 'Groceries');
+
+        $this->assertSame(200, $response['status']);
+        $this->assertSame('utensils', $response['body']['icon']);
+        $this->assertSame('orange', $response['body']['color']);
+        $this->assertSame(['icon' => 'utensils', 'color' => 'orange'], $this->categoryStyle(1));
+    }
+
+    public function test_update_category_rejects_unknown_color(): void
+    {
+        $user = $this->registerUser();
+        $this->createCategory($user['token'], 'Food');
+
+        $response = $this->updateCategoryWith($user['token'], 1, ['name' => 'Food', 'color' => 'pink']);
+
+        $this->assertSame(400, $response['status']);
+        $this->assertSame(['error' => 'color must be one of: red, orange, yellow, green, blue, purple'], $response['body']);
+        $this->assertSame(['icon' => 'tag', 'color' => 'blue'], $this->categoryStyle(1));
     }
 
     // Request body and name: the same readName() checks as create, answered with 400
@@ -969,6 +1077,16 @@ class CategoriesTest extends ApiTestCase
         return $this->post('/categories', ['name' => $name], ['Authorization: Bearer ' . $token]);
     }
 
+    private function createCategoryWith(string $token, array $body): array
+    {
+        return $this->post('/categories', $body, ['Authorization: Bearer ' . $token]);
+    }
+
+    private function updateCategoryWith(string $token, int $id, array $body): array
+    {
+        return $this->put('/categories/' . $id, $body, ['Authorization: Bearer ' . $token]);
+    }
+
     private function listCategories(string $token): array
     {
         return $this->get('/categories', ['Authorization: Bearer ' . $token]);
@@ -1025,6 +1143,14 @@ class CategoriesTest extends ApiTestCase
         $stmt->execute(['id' => $id]);
 
         return $stmt->fetchColumn();
+    }
+
+    private function categoryStyle(int $id): array|false
+    {
+        $stmt = self::$pdo->prepare('SELECT icon, color FROM categories WHERE id = :id');
+        $stmt->execute(['id' => $id]);
+
+        return $stmt->fetch();
     }
 
     private function countCategories(): int

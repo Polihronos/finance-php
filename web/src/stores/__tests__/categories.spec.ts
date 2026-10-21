@@ -5,7 +5,9 @@ import { ApiError } from '@/api/client'
 import { useCategoriesStore } from '../categories'
 import { usePeriodStore } from '../period'
 
-const categoriesBody = '{"categories":[{"id":2,"name":"Bills"},{"id":1,"name":"Food"}]}'
+const categoriesBody =
+  '{"categories":[{"id":2,"name":"Bills","icon":"zap","color":"yellow"},' +
+  '{"id":1,"name":"Food","icon":"utensils","color":"orange"}]}'
 const statsBody =
   '{"stats":[{"category_id":1,"transaction_count":2,"total":"30.49"},' +
   '{"category_id":2,"transaction_count":0,"total":"0.00"}]}'
@@ -48,8 +50,8 @@ test('load fills categories and stats', async () => {
   await categories.load()
 
   expect(categories.categories).toStrictEqual([
-    { id: 2, name: 'Bills' },
-    { id: 1, name: 'Food' },
+    { id: 2, name: 'Bills', icon: 'zap', color: 'yellow' },
+    { id: 1, name: 'Food', icon: 'utensils', color: 'orange' },
   ])
   expect(categories.stats).toStrictEqual([
     { category_id: 1, transaction_count: 2, total: '30.49' },
@@ -101,17 +103,21 @@ test('loadStats asks only for the stats', async () => {
   expect(categories.categories).toStrictEqual([])
 })
 
-// Create, rename and remove: a success loads the lists again, a failure loads nothing
+// Create, update and remove: a success loads the lists again, a failure loads nothing
 
 test('create posts then loads again', async () => {
   const fetchMock = fakeApi({
     ...loadAnswers,
-    'POST /api/categories': [201, '{"success":true,"category_id":3,"name":"Rent"}'],
+    'POST /api/categories': [
+      201,
+      '{"success":true,"category_id":3,"name":"Rent","icon":"house","color":"green"}',
+    ],
   })
   const categories = useCategoriesStore()
 
-  await categories.create('Rent')
+  await categories.create({ name: 'Rent', icon: 'house', color: 'green' })
 
+  expect(fetchMock.mock.calls[0]?.[1]?.body).toBe('{"name":"Rent","icon":"house","color":"green"}')
   expect(calledPaths(fetchMock)).toStrictEqual([
     'POST /api/categories',
     'GET /api/categories',
@@ -127,22 +133,28 @@ test('failed create does not load again', async () => {
   })
   const categories = useCategoriesStore()
 
-  const promise = categories.create('Food')
+  const promise = categories.create({ name: 'Food' })
 
   await expect(promise).rejects.toBeInstanceOf(ApiError)
   await expect(promise).rejects.toMatchObject({ status: 409, message: 'category already exists' })
   expect(calledPaths(fetchMock)).toStrictEqual(['POST /api/categories'])
 })
 
-test('rename puts then loads again', async () => {
+test('update puts then loads again', async () => {
   const fetchMock = fakeApi({
     ...loadAnswers,
-    'PUT /api/categories/1': [200, '{"success":true,"category_id":1,"name":"Groceries"}'],
+    'PUT /api/categories/1': [
+      200,
+      '{"success":true,"category_id":1,"name":"Groceries","icon":"shopping-cart","color":"green"}',
+    ],
   })
   const categories = useCategoriesStore()
 
-  await categories.rename(1, 'Groceries')
+  await categories.update(1, { name: 'Groceries', icon: 'shopping-cart', color: 'green' })
 
+  expect(fetchMock.mock.calls[0]?.[1]?.body).toBe(
+    '{"name":"Groceries","icon":"shopping-cart","color":"green"}',
+  )
   expect(calledPaths(fetchMock)).toStrictEqual([
     'PUT /api/categories/1',
     'GET /api/categories',
@@ -202,4 +214,17 @@ test('statsFor returns undefined for an unknown category', async () => {
   await categories.load()
 
   expect(categories.statsFor(99)).toBeUndefined()
+})
+
+// Clear: empties the categories and their stats
+
+test('clear empties categories and stats', async () => {
+  fakeApi(loadAnswers)
+  const categories = useCategoriesStore()
+  await categories.load()
+
+  categories.clear()
+
+  expect(categories.categories).toStrictEqual([])
+  expect(categories.stats).toStrictEqual([])
 })

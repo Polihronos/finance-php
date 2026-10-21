@@ -8,22 +8,36 @@ use PDOException;
 
 class Categories
 {
+    private const ICONS = [
+        'shopping-cart', 'utensils', 'coffee', 'car', 'fuel', 'bus', 'plane', 'house', 'zap',
+        'droplet', 'wifi', 'smartphone', 'heart-pulse', 'pill', 'shirt', 'gift', 'film',
+        'gamepad-2', 'dumbbell', 'graduation-cap', 'baby', 'paw-print', 'briefcase', 'piggy-bank',
+        'tag',
+    ];
+    private const COLORS = ['red', 'orange', 'yellow', 'green', 'blue', 'purple'];
+    private const DEFAULT_ICON = 'tag';
+    private const DEFAULT_COLOR = 'blue';
+
     public function __construct(private PDO $pdo)
     {
     }
 
     public function create(int $userId): void
     {
-        $name = $this->readName();
+        $category = $this->readCategory();
+        $icon = $category['icon'] ?? self::DEFAULT_ICON;
+        $color = $category['color'] ?? self::DEFAULT_COLOR;
 
         $stmt = $this->pdo->prepare(
-            'INSERT INTO categories (user_id, name) VALUES (:user_id, :name)'
+            'INSERT INTO categories (user_id, name, icon, color) VALUES (:user_id, :name, :icon, :color)'
         );
 
         try {
             $stmt->execute([
             'user_id' => $userId,
-            'name' => $name,
+            'name' => $category['name'],
+            'icon' => $icon,
+            'color' => $color,
             ]);
 
             $categoryId = (int) $this->pdo->lastInsertId();
@@ -37,14 +51,16 @@ class Categories
         echo json_encode ([
             'success' => true,
             'category_id' => $categoryId,
-            'name' => $name,
+            'name' => $category['name'],
+            'icon' => $icon,
+            'color' => $color,
         ]);
     }
 
     public function list(int $userId): void
     {
         $stmt = $this->pdo->prepare(
-            'SELECT id, name FROM categories WHERE user_id = :user_id ORDER BY name'
+            'SELECT id, name, icon, color FROM categories WHERE user_id = :user_id ORDER BY name'
         );
 
         $stmt->execute([
@@ -59,16 +75,20 @@ class Categories
 
     public function update(int $userId, int $id): void
     {
-        $name = $this->readName();
+        $category = $this->readCategory();
 
         $stmt = $this->pdo->prepare(
-            'UPDATE categories SET name = :name WHERE id = :id AND user_id = :user_id'
+            'UPDATE categories
+            SET name = :name, icon = COALESCE(:icon, icon), color = COALESCE(:color, color)
+            WHERE id = :id AND user_id = :user_id'
         );
 
         try {
             $stmt->execute([
             'user_id' => $userId,
-            'name' => $name,
+            'name' => $category['name'],
+            'icon' => $category['icon'],
+            'color' => $category['color'],
             'id' => $id,
             ]);
 
@@ -83,11 +103,17 @@ class Categories
             throw new HttpException(404, 'category not found');
         }
 
+        $stmt = $this->pdo->prepare('SELECT name, icon, color FROM categories WHERE id = :id');
+        $stmt->execute(['id' => $id]);
+        $saved = $stmt->fetch();
+
         http_response_code(200);
         echo json_encode ([
             'success' => true,
             'category_id' => $id,
-            'name' => $name,
+            'name' => $saved['name'],
+            'icon' => $saved['icon'],
+            'color' => $saved['color'],
         ]);
     }
 
@@ -121,7 +147,7 @@ class Categories
 
     }
 
-    private function readName(): string
+    private function readCategory(): array
     {
         $data = Request::json();
 
@@ -129,6 +155,32 @@ class Categories
             throw new HttpException(400, 'request body must be JSON');
         }
 
+        return [
+            'name' => $this->readName($data),
+            'icon' => $this->readChoice($data, 'icon', self::ICONS),
+            'color' => $this->readChoice($data, 'color', self::COLORS),
+        ];
+    }
+
+    private function readChoice(array $data, string $field, array $allowed): ?string
+    {
+        if (!isset($data[$field])) {
+            return null;
+        }
+
+        if (!is_string($data[$field])) {
+            throw new HttpException(400, "$field must be text");
+        }
+
+        if (!in_array($data[$field], $allowed, true)) {
+            throw new HttpException(400, "$field must be one of: " . implode(', ', $allowed));
+        }
+
+        return $data[$field];
+    }
+
+    private function readName(array $data): string
+    {
         if (!isset($data['name'])) {
             throw new HttpException(400, "name is required");
         }

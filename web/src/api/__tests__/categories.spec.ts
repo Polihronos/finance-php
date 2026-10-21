@@ -5,7 +5,7 @@ import {
   deleteCategory,
   listCategories,
   listCategoryStats,
-  renameCategory,
+  updateCategory,
 } from '../categories'
 import { ApiError, setToken } from '../client'
 import { fakeFetch } from './fakeFetch'
@@ -26,7 +26,8 @@ afterEach(() => {
 test('listCategories gets the categories', async () => {
   const fetchMock = fakeFetch(
     200,
-    '{"categories":[{"id":2,"name":"Bills"},{"id":1,"name":"Food"}]}',
+    '{"categories":[{"id":2,"name":"Bills","icon":"zap","color":"yellow"},' +
+      '{"id":1,"name":"Food","icon":"utensils","color":"orange"}]}',
   )
 
   const answer = await listCategories()
@@ -38,8 +39,8 @@ test('listCategories gets the categories', async () => {
   })
   expect(answer).toStrictEqual({
     categories: [
-      { id: 2, name: 'Bills' },
-      { id: 1, name: 'Food' },
+      { id: 2, name: 'Bills', icon: 'zap', color: 'yellow' },
+      { id: 1, name: 'Food', icon: 'utensils', color: 'orange' },
     ],
   })
 })
@@ -53,49 +54,85 @@ test('listCategories passes on the api error', async () => {
   await expect(promise).rejects.toMatchObject({ status: 401, message: 'not logged in' })
 })
 
-// Create: posts the name, returns the new category
+// Create: posts the name, icon and color, returns the new category
 
-test('createCategory posts the name', async () => {
-  const fetchMock = fakeFetch(201, '{"success":true,"category_id":1,"name":"Food"}')
+test('createCategory posts the name, icon and color', async () => {
+  const fetchMock = fakeFetch(
+    201,
+    '{"success":true,"category_id":1,"name":"Food","icon":"utensils","color":"orange"}',
+  )
 
-  const answer = await createCategory('Food')
+  const answer = await createCategory({ name: 'Food', icon: 'utensils', color: 'orange' })
 
   expect(fetchMock).toHaveBeenCalledWith('/api/categories', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: '{"name":"Food"}',
+    body: '{"name":"Food","icon":"utensils","color":"orange"}',
   })
-  expect(answer).toStrictEqual({ success: true, category_id: 1, name: 'Food' })
+  expect(answer).toStrictEqual({
+    success: true,
+    category_id: 1,
+    name: 'Food',
+    icon: 'utensils',
+    color: 'orange',
+  })
 })
 
 test('createCategory passes on the api error', async () => {
   fakeFetch(409, '{"error":"category already exists"}')
 
-  const promise = createCategory('Food')
+  const promise = createCategory({ name: 'Food' })
 
   await expect(promise).rejects.toBeInstanceOf(ApiError)
   await expect(promise).rejects.toMatchObject({ status: 409, message: 'category already exists' })
 })
 
-// Rename: puts the new name to the category's id
+// Update: puts the name, and the icon and color when given, to the category's id
 
-test('renameCategory puts the name to the id', async () => {
-  const fetchMock = fakeFetch(200, '{"success":true,"category_id":3,"name":"Groceries"}')
+test('updateCategory puts the fields to the id', async () => {
+  const fetchMock = fakeFetch(
+    200,
+    '{"success":true,"category_id":3,"name":"Groceries","icon":"shopping-cart","color":"green"}',
+  )
 
-  const answer = await renameCategory(3, 'Groceries')
+  const answer = await updateCategory(3, {
+    name: 'Groceries',
+    icon: 'shopping-cart',
+    color: 'green',
+  })
 
   expect(fetchMock).toHaveBeenCalledWith('/api/categories/3', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: '{"name":"Groceries"}',
+    body: '{"name":"Groceries","icon":"shopping-cart","color":"green"}',
   })
-  expect(answer).toStrictEqual({ success: true, category_id: 3, name: 'Groceries' })
+  expect(answer).toStrictEqual({
+    success: true,
+    category_id: 3,
+    name: 'Groceries',
+    icon: 'shopping-cart',
+    color: 'green',
+  })
 })
 
-test('renameCategory passes on the api error', async () => {
+test('updateCategory sends only the name when that is all that changes', async () => {
+  const fetchMock = fakeFetch(
+    200,
+    '{"success":true,"category_id":3,"name":"Groceries","icon":"tag","color":"blue"}',
+  )
+
+  await updateCategory(3, { name: 'Groceries' })
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    '/api/categories/3',
+    expect.objectContaining({ body: '{"name":"Groceries"}' }),
+  )
+})
+
+test('updateCategory passes on the api error', async () => {
   fakeFetch(404, '{"error":"category not found"}')
 
-  const promise = renameCategory(3, 'Groceries')
+  const promise = updateCategory(3, { name: 'Groceries' })
 
   await expect(promise).rejects.toBeInstanceOf(ApiError)
   await expect(promise).rejects.toMatchObject({ status: 404, message: 'category not found' })

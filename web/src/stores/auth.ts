@@ -3,6 +3,8 @@ import { defineStore } from 'pinia'
 
 import { setToken } from '@/api/client'
 import * as authApi from '@/api/auth'
+import { useCategoriesStore } from '@/stores/categories'
+import { useTransactionsStore } from '@/stores/transactions'
 
 const STORAGE_KEY = 'token'
 
@@ -17,6 +19,8 @@ export const useAuthStore = defineStore('auth', () => {
     setToken(newToken)
     if (newToken === null) {
       localStorage.removeItem(STORAGE_KEY)
+      useTransactionsStore().clear()
+      useCategoriesStore().clear()
     } else {
       localStorage.setItem(STORAGE_KEY, newToken)
     }

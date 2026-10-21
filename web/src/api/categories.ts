@@ -1,6 +1,7 @@
 import { request } from './client'
 import type {
   CategoriesResponse,
+  CategoryInput,
   CategoryResponse,
   CategoryStatsResponse,
   StatsPeriod,
@@ -11,12 +12,12 @@ export function listCategories(): Promise<CategoriesResponse> {
   return request<CategoriesResponse>('GET', '/categories')
 }
 
-export function createCategory(name: string): Promise<CategoryResponse> {
-  return request<CategoryResponse>('POST', '/categories', { name })
+export function createCategory(input: CategoryInput): Promise<CategoryResponse> {
+  return request<CategoryResponse>('POST', '/categories', input)
 }
 
-export function renameCategory(id: number, name: string): Promise<CategoryResponse> {
-  return request<CategoryResponse>('PUT', `/categories/${id}`, { name })
+export function updateCategory(id: number, input: CategoryInput): Promise<CategoryResponse> {
+  return request<CategoryResponse>('PUT', `/categories/${id}`, input)
 }
 
 export function deleteCategory(id: number): Promise<SuccessResponse> {

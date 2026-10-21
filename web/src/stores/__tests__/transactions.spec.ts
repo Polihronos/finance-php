@@ -284,3 +284,18 @@ test('failed remove keeps the list unchanged', async () => {
   await expect(promise).rejects.toMatchObject({ status: 404, message: 'transaction not found' })
   expect(transactions.transactions).toStrictEqual([lunch, gas])
 })
+
+// Clear: empties everything, so nothing older is offered either
+
+test('clear empties the list and forgets the loaded months', async () => {
+  const fetchMock = fakeApi({ [LIST]: [200, listBody] })
+  const transactions = useTransactionsStore()
+  await transactions.load()
+
+  transactions.clear()
+  await transactions.loadOlder()
+
+  expect(transactions.transactions).toStrictEqual([])
+  expect(transactions.hasOlder).toBe(false)
+  expect(calledPaths(fetchMock)).toStrictEqual([LIST])
+})

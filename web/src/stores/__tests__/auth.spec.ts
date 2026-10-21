@@ -4,6 +4,8 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { fakeFetch } from '@/api/__tests__/fakeFetch'
 import { ApiError, request, setToken } from '@/api/client'
 import { useAuthStore } from '../auth'
+import { useCategoriesStore } from '../categories'
+import { useTransactionsStore } from '../transactions'
 
 const token = '9a59d267832e358d55aef1712779caf7094709418ca846d86fa7fa3ba9ca1b3e'
 
@@ -156,4 +158,45 @@ test('forget clears the token without calling the api', async () => {
   expect(auth.token).toBeNull()
   expect(localStorage.getItem('token')).toBeNull()
   await expectClientToSend({})
+})
+
+// Your data: logging out or a 401 empties the transactions and categories in memory, so the next person on this browser sees none of them
+
+function fillStores(): void {
+  useTransactionsStore().transactions = [
+    {
+      id: 1,
+      category_id: 1,
+      amount: '12.50',
+      currency: 'EUR',
+      date: '2026-10-12',
+      payment_method: 'card',
+      description: 'Lunch',
+      place: null,
+    },
+  ]
+  useCategoriesStore().categories = [{ id: 1, name: 'Food', icon: 'utensils', color: 'orange' }]
+}
+
+test('logout empties transactions and categories', async () => {
+  localStorage.setItem('token', token)
+  const auth = useAuthStore()
+  fillStores()
+  fakeFetch(200, '{"success":true}')
+
+  await auth.logout()
+
+  expect(useTransactionsStore().transactions).toStrictEqual([])
+  expect(useCategoriesStore().categories).toStrictEqual([])
+})
+
+test('forget empties transactions and categories', () => {
+  localStorage.setItem('token', token)
+  const auth = useAuthStore()
+  fillStores()
+
+  auth.forget()
+
+  expect(useTransactionsStore().transactions).toStrictEqual([])
+  expect(useCategoriesStore().categories).toStrictEqual([])
 })

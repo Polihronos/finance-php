@@ -68,10 +68,16 @@ export const useTransactionsStore = defineStore('transactions', () => {
     }
   }
 
+  function clear(): void {
+    transactions.value = []
+    hasOlder.value = false
+    loadedFrom.value = null
+  }
+
   async function remove(id: number): Promise<void> {
     await transactionsApi.deleteTransaction(id)
     transactions.value = transactions.value.filter((row) => row.id !== id)
   }
 
-  return { transactions, hasOlder, load, loadOlder, create, update, remove }
+  return { transactions, hasOlder, load, loadOlder, create, update, remove, clear }
 })

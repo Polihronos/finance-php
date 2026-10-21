@@ -49,6 +49,14 @@ $pdo->exec("
 ");
 
 $pdo->exec("
+    ALTER TABLE categories ADD COLUMN IF NOT EXISTS icon VARCHAR(30) NOT NULL DEFAULT 'tag'
+");
+
+$pdo->exec("
+    ALTER TABLE categories ADD COLUMN IF NOT EXISTS color VARCHAR(10) NOT NULL DEFAULT 'blue'
+");
+
+$pdo->exec("
     CREATE INDEX IF NOT EXISTS user_description ON transactions (user_id, description)
 ");
 
