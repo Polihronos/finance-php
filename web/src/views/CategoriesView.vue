@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
-import { Check, Plus, SquarePen, Trash, X } from '@lucide/vue'
+import { Check, ChevronLeft, ChevronRight, Plus, SquarePen, Trash, X } from '@lucide/vue'
 
 import { ApiError } from '@/api/client'
 import AppButton from '@/components/AppButton.vue'
@@ -126,6 +126,24 @@ async function add(): Promise<void> {
       <AppButton :icon="Plus" label="Add" type="submit" :disabled="loading" />
     </form>
     <AppError v-if="error">{{ error }}</AppError>
+    <div class="picker">
+      <AppButton
+        :icon="ChevronLeft"
+        :label="periodStore.period === 'month' ? 'Previous month' : 'Previous year'"
+        icon-only
+        variant="quiet"
+        @click="periodStore.shift(-1)"
+      />
+      <span>{{ periodStore.label }}</span>
+      <AppButton
+        :icon="ChevronRight"
+        :label="periodStore.period === 'month' ? 'Next month' : 'Next year'"
+        icon-only
+        variant="quiet"
+        :disabled="periodStore.atLatest"
+        @click="periodStore.shift(1)"
+      />
+    </div>
     <ul class="list">
       <li
         v-for="category in categoriesStore.categories"
@@ -203,8 +221,12 @@ form {
   margin-bottom: 1rem;
 }
 
-.list {
-  margin-top: 1.5rem;
+.picker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 1.5rem 0 0.5rem;
+  font-weight: 600;
 }
 
 li {

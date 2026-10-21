@@ -83,3 +83,63 @@ test('statsPeriod asks for the year of the chosen month when yearly is on', () =
 
   expect(period.statsPeriod).toStrictEqual({ year: '2026' })
 })
+
+// Picking: shift() moves one month or one year, never past this month, label names what is shown
+
+test('shift goes back one month and over the new year', () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date(2026, 0, 19))
+  const period = usePeriodStore()
+
+  period.shift(-1)
+
+  expect(period.month).toBe('2025-12')
+  expect(period.label).toBe('December 2025')
+})
+
+test('shift goes back one year when yearly is on', () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date(2026, 9, 19))
+  const period = usePeriodStore()
+  period.toggle()
+
+  period.shift(-1)
+
+  expect(period.month).toBe('2025-10')
+  expect(period.label).toBe('2025')
+  expect(period.statsPeriod).toStrictEqual({ year: '2025' })
+})
+
+test('shift does not go past this month', () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date(2026, 9, 19))
+  const period = usePeriodStore()
+
+  period.shift(1)
+
+  expect(period.month).toBe('2026-10')
+  expect(period.atLatest).toBe(true)
+})
+
+test('shift forward a year stops at this month', () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date(2026, 9, 19))
+  const period = usePeriodStore()
+  period.month = '2025-12'
+  period.toggle()
+
+  period.shift(1)
+
+  expect(period.month).toBe('2026-10')
+})
+
+test('atLatest is false for an earlier month', () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date(2026, 9, 19))
+  const period = usePeriodStore()
+
+  period.shift(-1)
+
+  expect(period.atLatest).toBe(false)
+  expect(period.label).toBe('September 2026')
+})

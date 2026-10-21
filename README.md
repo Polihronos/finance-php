@@ -32,12 +32,13 @@ Web app:
 |---|---|
 | Log in | Done, logic tested |
 | Create account | Done, logic tested |
-| Log out and expired sessions | Done, logic tested |
+| Expired sessions | Done, logic tested |
+| Log out | Logic done and tested. The button in the header is commented out for now |
 | Protected screens | Done |
-| Transactions | Started: the screen and its header exist, the list does not yet |
-| Add and edit transaction | Planned |
-| Categories | Done, logic tested: add, rename, delete, sum and number of transactions per category |
+| Transactions | Done, logic tested: list by month with month totals, 3 months at a time, add, edit, delete, suggestions while typing |
+| Categories | Done, logic tested: add, rename, delete, what was spent and the number of transactions per category in any month or year |
 | Monthly or yearly toggle | Done, logic tested |
+| Tab bar between Transactions and Categories | Done |
 
 ## Database design
 
@@ -69,6 +70,7 @@ few months reads only those months.
 api/                  The PHP API. Every PHP command in this README runs from this folder.
 web/                  The Vue web app. Every npm command in this README runs from this folder.
 docs/images/          Diagrams.
+docs/icons/           Dog pictures. The app icon in the header is made from dog-01.png.
 README.md             This file.
 ```
 
@@ -106,23 +108,35 @@ src/main.ts                       Entry point. Loads the font and styles, starts
                                   the router, and sends the user to log in when the API answers 401.
 src/App.vue                       Shows the screen of the current route.
 src/router/index.ts               The routes, and the guard that keeps logged-out users on log in.
+                                  / goes to /transactions.
 src/api/client.ts                 request(): every API call goes through it. Adds the token, sends
                                   and reads JSON, and turns an error answer into an ApiError.
 src/api/types.ts                  The shapes of the API's answers.
 src/api/auth.ts                   register(), login() and logout(): one function per endpoint.
 src/api/categories.ts             The category endpoints and the stats endpoint, one function each.
+src/api/transactions.ts           The transaction endpoints and the suggestions endpoint, one
+                                  function each.
 src/stores/auth.ts                The token: kept in memory, in localStorage and in client.ts.
-src/stores/categories.ts          The categories and their stats. Loads both again after every change.
-src/stores/period.ts              Monthly or yearly, saved in localStorage.
+src/stores/categories.ts          The categories and the stats of the chosen month or year. Loads
+                                  both again after every change, loadStats() only the stats.
+src/stores/period.ts              Monthly or yearly, saved in localStorage, the chosen month, its
+                                  label, and shift() to move one month or year.
+src/stores/transactions.ts        The loaded months of transactions, newest first. load() gets the
+                                  last 3 months, loadOlder() the 3 before them.
+src/utils/money.ts                formatEur(): how every amount is shown.
 src/views/                        One file per screen: LoginView, RegisterView, TransactionsView,
                                   CategoriesView.
-src/components/AppLayout.vue      Header with the Log out button, around every protected screen.
+src/components/AppLayout.vue      Around every protected screen: the header with the dog icon, which
+                                  links to Transactions, and the tab bar at the bottom.
+src/components/TransactionForm.vue  The add and edit form, with suggestions while typing.
 src/components/AppButton.vue      The only button: always an icon, with text or icon only.
 src/components/AppError.vue       The error note shown in forms.
 src/components/PasswordInput.vue  Password field with a button to show or hide the password.
 src/components/PeriodToggle.vue   Moon and sun switch between monthly and yearly, shown in the
                                   header on routes with meta: { periodToggle: true }.
-src/assets/main.css               Colors, font, page layout, form fields and links.
+src/assets/main.css               Colors, font, page layout, form fields, links, and the shared
+                                  list, card, choice button and month line styles.
+src/assets/dog.webp               The app icon, a small copy of docs/icons/dog-01.png.
 src/**/__tests__/                 Vitest tests.
 vite.config.ts                    Dev server, and the /api forwarding to the PHP API.
 package.json                      npm packages and scripts.
@@ -671,14 +685,33 @@ early: required fields, the email format and the password length.
 
 | Moment | What happens |
 |---|---|
-| Opening Categories | The categories and their stats are loaded together. Each card shows the name, the average spent in EUR on the left and the number of transactions on the right |
-| Moon and sun toggle in the header | Switches every card between the monthly average and the yearly one, which is the monthly average × 12. The choice is saved in `localStorage` |
+| Opening Categories | The categories and the stats of this month are loaded together. Each card shows the name, what was spent in that month on the left and the number of its transactions on the right |
+| Moon and sun toggle in the header | Switches between the chosen month and its year and asks the API for the stats again. Nothing is averaged or estimated: the year shows what was spent in the year. The choice is saved in `localStorage` |
+| Arrows above the list | Show the month before or after, or the year before or after when yearly is on. The month or year is named between them. The next arrow stops at this month or this year. Each step asks the API for the stats of that period |
 | Clicking a card | Opens it and shows the rename and delete buttons. Only one card is open at a time, clicking it again closes it |
 | Rename | The name turns into a field. Enter or ✓ saves, Esc or X cancels |
 | Delete | The card asks "Delete Food?" first. A category that still has transactions is not deleted and the API's error is shown |
 
-Amounts are shown as whole euros. After every add, rename or delete the list and the stats are
-loaded again, so the order and the numbers always match the database.
+After every add, rename or delete the list and the stats are loaded again, so the order and the
+numbers always match the database.
+
+### Transactions in the browser
+
+| Moment | What happens |
+|---|---|
+| Opening Transactions | This month and the 2 before it are loaded, newest first, grouped by month. Each month starts with a line with its name and total. Each card shows the date with its weekday, the description or else the category, the amount, the category and place, and a red card or orange banknote icon |
+| Load 3 more months | Shown while older transactions exist. Each press adds the 3 months before the oldest one on screen. It disappears when nothing older is left |
+| Add transaction | Opens the form above the list. The date starts on today and Card is chosen. Category and Card or Cash are buttons. Without categories an Add category button leads to Categories |
+| Typing a description | 200 ms after the last key the API is asked for suggestions, and older answers are ignored. Picking a suggestion, or typing it in full, fills in its category and place and its saved spelling |
+| Amount | Takes digits with a comma or a point and at most 2 decimals. Anything else is dropped while typing |
+| Clicking a card | Opens it and shows the edit and delete buttons, like on Categories. Edit opens the same form inside the card, already filled in |
+| Delete | The card asks "Delete Lunch?" first |
+| Saving | One request. The saved transaction goes into the list at its date. A transaction dated before the months on screen is left out until its months are loaded, so no month total is wrong |
+
+### Moving around
+
+The tab bar at the bottom links Transactions and Categories, and the current page is red. The dog
+in the header also leads to Transactions. On a computer everything stays in a phone-wide column.
 
 ### Design
 
@@ -689,6 +722,8 @@ loaded again, so the order and the numbers always match the database.
 | Icons | Lucide through `@lucide/vue`. Only the icons that are imported end up in the app |
 | Buttons | Always `AppButton`: an icon plus text, or only an icon with its text as the accessible name and tooltip. `variant="quiet"` drops the red fill |
 | Errors | `AppError`: a yellow note with a stripe and a ghost icon, above the form's button |
+| Amounts | `formatEur()`: a comma for cents and `EUR` after, whole euros without `,00` |
+| Shared styles | `.list`, `.list-item`, `.list-actions`, `.choices`, `.divider`, `.muted`, `.empty` and `.wide` in `main.css`, used by both pages |
 
 Text is always shown with `{{ }}`, which Vue escapes. ESLint refuses `v-html`, so text from the API
 can never run as code in the page.
@@ -742,9 +777,12 @@ needs.
 | `src/api/__tests__/client.spec.ts` | The path, JSON body and token header of every request, success and error answers, answers that are not JSON, and which `401` answers call the handler set with `setUnauthorizedHandler()` |
 | `src/api/__tests__/auth.spec.ts` | Register, login and logout: what each sends, what it returns, and that API errors reach the caller |
 | `src/stores/__tests__/auth.spec.ts` | The token after start, login, register, logout and forget, in the store, in `localStorage` and in the requests that follow, also when the API fails |
-| `src/api/__tests__/categories.spec.ts` | List, create, rename, delete and stats: what each sends, what it returns, and that API errors reach the caller |
-| `src/stores/__tests__/categories.spec.ts` | Loading categories and stats together, loading again only after a successful change, and `statsFor()` |
-| `src/stores/__tests__/period.spec.ts` | The saved choice at start, a broken saved value, and saving on every toggle |
+| `src/api/__tests__/categories.spec.ts` | List, create, rename, delete, and stats for a month or a year: what each sends, what it returns, and that API errors reach the caller |
+| `src/stores/__tests__/categories.spec.ts` | Loading categories and the stats of the chosen month or year together, `loadStats()` alone, loading again only after a successful change, and `statsFor()` |
+| `src/stores/__tests__/period.spec.ts` | The saved choice at start, a broken saved value, saving on every toggle, the chosen month starting on this month, asking for that month or its year, moving one month or year back also over the new year, never past this month, and the label |
+| `src/api/__tests__/transactions.spec.ts` | List between two dates, create, update, delete and suggestions: what each sends, what it returns, that the typed text is encoded, and that API errors reach the caller |
+| `src/stores/__tests__/transactions.spec.ts` | Loading the last 3 months, loading 3 more also over the new year, keeping the list sorted after create and update without loading again, leaving out transactions older than the loaded months, and failures |
+| `src/utils/__tests__/money.spec.ts` | A comma for cents and no `,00` on whole euros |
 | `src/api/__tests__/fakeFetch.ts` | Shared helper: replaces `fetch` with a fake that answers with a given status and body |
 
 Other checks, from the same folder:

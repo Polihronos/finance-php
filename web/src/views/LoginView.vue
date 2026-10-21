@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { ApiError } from '@/api/client'
+import dog from '@/assets/dog.webp'
 import AppButton from '@/components/AppButton.vue'
 import AppError from '@/components/AppError.vue'
 import PasswordInput from '@/components/PasswordInput.vue'
@@ -34,7 +35,10 @@ async function submit(): Promise<void> {
 
 <template>
   <main class="centered">
-    <h1>Log in MyApp</h1>
+    <h1 class="title">
+      Log in
+      <img :src="dog" alt="MyApp" width="48" height="48" />
+    </h1>
     <form @submit.prevent="submit">
       <label>
         Email
@@ -50,3 +54,12 @@ async function submit(): Promise<void> {
     <p>No account yet? <RouterLink :to="{ name: 'register' }">Create one</RouterLink></p>
   </main>
 </template>
+
+<style scoped>
+.title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+</style>
